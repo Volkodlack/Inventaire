@@ -53,29 +53,101 @@ function goTab(name, el) {
 }
 
 // ── CAMERA ────────────────────────────────────────────────
-function startCam() {
+var currentDeviceId = null;
+
+function startCam(deviceId) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     setStatus('Caméra non disponible — utilisez la saisie manuelle', 'err');
     return;
   }
   setStatus('Demande accès caméra…', '');
-  navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
-  }).then(function(s) {
-    stream = s;
-    var vid = document.getElementById('vid');
-    vid.srcObject = s;
-    vid.play();
-    document.getElementById('camOff').style.display    = 'none';
-    document.getElementById('scanOverlay').style.display = 'flex';
-    document.getElementById('btnStart').style.display  = 'none';
-    document.getElementById('btnStop').style.display   = 'block';
-    scanning = true;
-    setStatus('Scanner actif — approchez le code-barres', 'ok');
-    startDetect(vid);
-  }).catch(function(e) {
-    setStatus('Erreur caméra : ' + e.message, 'err');
-  });
+
+  var videoConstraints = deviceId
+    ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } };
+
+  navigator.mediaDevices.getUserMedia({ video: videoConstraints })
+    .then(function(s) {
+      stream = s;
+      var vid = document.getElementById('vid');
+      vid.srcObject = s;
+      vid.play();
+      document.getElementById('camOff').style.display      = 'none';
+      document.getElementById('scanOverlay').style.display = 'flex';
+      document.getElementById('btnStart').style.display    = 'none';
+      document.getElementById('btnStop').style.display     = 'block';
+      document.getElementById('camControls').style.display = 'block';
+      scanning = true;
+      setStatus('Scanner actif — approchez le code-barres', 'ok');
+
+      // Récupérer le track vidéo pour autofocus et zoom
+      var track = s.getVideoTracks()[0];
+      if (track) {
+        currentDeviceId = track.getSettings().deviceId;
+        applyAutoFocus(track);
+        initZoomControl(track);
+      }
+
+      // Peupler le sélecteur de caméras
+      populateCameraList(currentDeviceId);
+
+      startDetect(vid);
+    }).catch(function(e) {
+      setStatus('Erreur caméra : ' + e.message, 'err');
+    });
+}
+
+function applyAutoFocus(track) {
+  var caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (caps.focusMode && caps.focusMode.indexOf('continuous') >= 0) {
+    track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+      .catch(function() {}); // silencieux si non supporté
+  }
+}
+
+function initZoomControl(track) {
+  var caps = track.getCapabilities ? track.getCapabilities() : {};
+  var zoomWrap = document.getElementById('zoomWrap');
+  if (caps.zoom) {
+    var slider = document.getElementById('zoomSlider');
+    slider.min   = caps.zoom.min || 1;
+    slider.max   = caps.zoom.max || 5;
+    slider.step  = caps.zoom.step || 0.1;
+    slider.value = caps.zoom.min || 1;
+    document.getElementById('zoomVal').textContent = (caps.zoom.min || 1) + '×';
+    zoomWrap.style.display = 'block';
+  } else {
+    zoomWrap.style.display = 'none';
+  }
+}
+
+function applyZoom(val) {
+  document.getElementById('zoomVal').textContent = parseFloat(val).toFixed(1) + '×';
+  if (!stream) return;
+  var track = stream.getVideoTracks()[0];
+  if (!track) return;
+  track.applyConstraints({ advanced: [{ zoom: parseFloat(val) }] })
+    .catch(function() {});
+}
+
+function populateCameraList(activeDeviceId) {
+  navigator.mediaDevices.enumerateDevices().then(function(devices) {
+    var cams = devices.filter(function(d) { return d.kind === 'videoinput'; });
+    var sel  = document.getElementById('cameraSelect');
+    var wrap = document.getElementById('cameraSelectWrap');
+    if (cams.length <= 1) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    sel.innerHTML = cams.map(function(c, i) {
+      var label = c.label || ('Caméra ' + (i + 1));
+      var selected = c.deviceId === activeDeviceId ? ' selected' : '';
+      return '<option value="' + c.deviceId + '"' + selected + '>' + label + '</option>';
+    }).join('');
+  }).catch(function() {});
+}
+
+function switchCamera(deviceId) {
+  stopCam();
+  setTimeout(function() { startCam(deviceId); }, 300);
 }
 
 function stopCam() {
@@ -86,10 +158,13 @@ function stopCam() {
   }
   var vid = document.getElementById('vid');
   vid.srcObject = null;
-  document.getElementById('camOff').style.display    = 'flex';
+  document.getElementById('camOff').style.display      = 'flex';
   document.getElementById('scanOverlay').style.display = 'none';
-  document.getElementById('btnStart').style.display  = 'block';
-  document.getElementById('btnStop').style.display   = 'none';
+  document.getElementById('btnStart').style.display    = 'block';
+  document.getElementById('btnStop').style.display     = 'none';
+  document.getElementById('camControls').style.display = 'none';
+  document.getElementById('zoomWrap').style.display    = 'none';
+  document.getElementById('cameraSelectWrap').style.display = 'none';
   setStatus('Scanner arrêté', '');
 }
 
@@ -204,7 +279,7 @@ function saveNew() {
       showLS(pendingCode, item, true);
       closeM('mNew');
       toast('✅ ' + name + ' ajouté !');
-      setTimeout(startCam, 400);
+      setTimeout(function() { startCam(currentDeviceId); }, 400);
     })
     .catch(function(e) { toast('⚠️ ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = '✅ Enregistrer'; });

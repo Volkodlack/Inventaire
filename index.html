@@ -51,6 +51,17 @@
     <div class="ls-name" id="lsname"></div>
     <div class="ls-qty" id="lsqty"></div>
   </div>
+  <!-- Contrôles caméra avancés -->
+  <div id="camControls" style="display:none">
+    <div id="cameraSelectWrap" style="display:none">
+      <label class="cam-ctrl-label">🔄 Objectif</label>
+      <select id="cameraSelect" onchange="switchCamera(this.value)"></select>
+    </div>
+    <div id="zoomWrap" style="display:none">
+      <label class="cam-ctrl-label">🔍 Zoom : <span id="zoomVal">1×</span></label>
+      <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1" oninput="applyZoom(this.value)">
+    </div>
+  </div>
   <button class="btn bp" id="btnStart" onclick="startCam()">📷 Démarrer le scanner</button>
   <button class="btn bs" id="btnStop" onclick="stopCam()" style="display:none">⏹ Arrêter</button>
   <div class="manual-section">

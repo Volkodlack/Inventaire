@@ -248,3 +248,26 @@ tr:last-child td { border-bottom: none; }
   white-space: nowrap; opacity: 0; transition: .3s; z-index: 2000; pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── CONTRÔLES CAMÉRA ── */
+#camControls {
+  width: 100%; padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 10px;
+}
+.cam-ctrl-label {
+  font-size: 11px; color: var(--dim); font-weight: 600; display: block; margin-bottom: 4px;
+}
+#cameraSelect {
+  width: 100%; background: var(--surf2); color: var(--txt);
+  border: 1px solid var(--brd); border-radius: 10px;
+  padding: 8px 12px; font-size: 13px; cursor: pointer; appearance: auto;
+}
+#zoomSlider {
+  width: 100%; accent-color: var(--blue);
+  -webkit-appearance: none; appearance: none;
+  height: 4px; border-radius: 4px; background: var(--surf2); outline: none;
+  cursor: pointer;
+}
+#zoomSlider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px;
+  background: var(--blue); border-radius: 50%; cursor: pointer;
+}
