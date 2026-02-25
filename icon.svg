@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#07090f"/>
+  <rect x="60" y="60" width="392" height="392" rx="40" fill="#0f1320" stroke="#1e2740" stroke-width="4"/>
+  <!-- Barcode lines -->
+  <rect x="100" y="140" width="18" height="160" rx="4" fill="#00e5ff"/>
+  <rect x="128" y="140" width="8" height="160" rx="2" fill="#00e5ff"/>
+  <rect x="146" y="140" width="24" height="160" rx="4" fill="#00e5ff"/>
+  <rect x="180" y="140" width="10" height="160" rx="2" fill="#00e5ff"/>
+  <rect x="200" y="140" width="18" height="160" rx="4" fill="#00e5ff"/>
+  <rect x="228" y="140" width="6" height="160" rx="2" fill="#00e5ff"/>
+  <rect x="244" y="140" width="20" height="160" rx="4" fill="#00e5ff"/>
+  <rect x="274" y="140" width="12" height="160" rx="2" fill="#00e5ff"/>
+  <rect x="296" y="140" width="22" height="160" rx="4" fill="#00e5ff"/>
+  <rect x="328" y="140" width="8" height="160" rx="2" fill="#00e5ff"/>
+  <rect x="346" y="140" width="18" height="160" rx="4" fill="#00e5ff"/>
+  <rect x="374" y="140" width="10" height="160" rx="2" fill="#00e5ff"/>
+  <rect x="394" y="140" width="18" height="160" rx="4" fill="#00e5ff"/>
+  <!-- Scan line -->
+  <rect x="80" y="215" width="352" height="4" rx="2" fill="#00e676" opacity="0.8"/>
+  <!-- Text -->
+  <text x="256" y="360" text-anchor="middle" font-family="Courier New, monospace" font-size="48" font-weight="700" fill="#00e5ff">Invent</text>
+  <text x="256" y="410" text-anchor="middle" font-family="Courier New, monospace" font-size="30" fill="#6b7399">PRO</text>
+</svg>
