@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Inventaire">
-<meta name="theme-color" content="#07090f">
+<meta name="theme-color" content="#ffffff">
 <link rel="stylesheet" href="style.css">
 <title>Inventaire — Thierry Carles</title>
 </head>
@@ -104,14 +104,24 @@
 
   <!-- PHASE 1 : Saisie -->
   <div id="blPhase1">
-    <div class="sec-title" style="margin-bottom:12px">📋 Articles du bon de livraison</div>
+    <!-- Bannière photo IA -->
+    <div class="bl-photo-banner">
+      <div class="bl-photo-banner-ico">🤖</div>
+      <div class="bl-photo-banner-txt">
+        <strong>Photographier le bon de livraison</strong>
+        <span>L'IA extrait automatiquement tous les articles (multi-pages)</span>
+      </div>
+    </div>
+    <button class="btn bp" style="margin-bottom:8px" onclick="openBLPhoto()">📸 Scanner le BL en photo (IA)</button>
+
+    <div class="sec-title" style="margin-bottom:8px">📋 Articles du bon de livraison</div>
     <div id="blItemsList" class="ilist"></div>
-    <div id="blEmptyMsg" class="empty" style="padding:30px 20px">
+    <div id="blEmptyMsg" class="empty" style="padding:24px 20px">
       <div class="eico">📋</div>
       <div class="etit">BL vide</div>
-      <div class="esub">Ajoutez les articles attendus</div>
+      <div class="esub">Photographiez le BL ou ajoutez manuellement</div>
     </div>
-    <button class="btn bp" style="margin-top:12px" onclick="openBLAdd()">➕ Ajouter un article au BL</button>
+    <button class="btn bs" style="margin-top:8px" onclick="openBLAdd()">➕ Ajouter un article manuellement</button>
     <button class="btn bg" id="btnStartVerif" onclick="startBLVerif()" style="display:none;margin-top:8px">🔍 Démarrer la vérification →</button>
   </div>
 
@@ -187,7 +197,7 @@
   <button class="btn br2 danger-btn" onclick="clearAll()">🗑 Effacer l'inventaire</button>
 </div>
 
-<!-- MODAL NOUVEAU PRODUIT (scanner standard) -->
+<!-- MODAL NOUVEAU PRODUIT -->
 <div class="mover" id="mNew">
   <div class="modal">
     <div class="mhandle"></div>
@@ -275,6 +285,60 @@
     </div>
     <div class="status" id="blAddStatus">Pointez le code-barres</div>
     <button class="btn bs" onclick="stopBLAddCam()">Annuler</button>
+  </div>
+</div>
+
+<!-- MODAL PHOTO BL (IA) -->
+<div class="mover" id="mBLPhoto">
+  <div class="modal bl-photo-modal">
+    <div class="mhandle"></div>
+
+    <!-- État : capture des pages -->
+    <div id="blPhotoCapture">
+      <div class="mtit">📸 Photographier le BL</div>
+      <p style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.5">
+        Photographiez chaque page du bon de livraison. L'IA extraira automatiquement tous les articles.
+      </p>
+      <div class="bl-photo-pages" id="blPhotoPages"></div>
+      <div id="blPhotoEmptyMsg" style="text-align:center;padding:20px 10px;color:var(--dim)">
+        <div style="font-size:36px;margin-bottom:8px">📄</div>
+        <div style="font-size:13px;font-weight:600;color:var(--txt)">Aucune page ajoutée</div>
+        <div style="font-size:11px;margin-top:4px">Prenez une photo ou importez depuis la galerie</div>
+      </div>
+      <!-- Inputs fichiers (hidden) -->
+      <input type="file" id="blPhotoCamInput"     accept="image/*" capture="environment" style="display:none" onchange="handleBLPhotoCam(this)">
+      <input type="file" id="blPhotoGalleryInput" accept="image/*" multiple           style="display:none" onchange="handleBLPhotoGallery(this)">
+      <div class="bl-photo-actions" style="margin-top:10px">
+        <button class="btn bp" onclick="document.getElementById('blPhotoCamInput').click()">📷 Photo</button>
+        <button class="btn bs" onclick="document.getElementById('blPhotoGalleryInput').click()">🖼 Galerie</button>
+      </div>
+      <button class="btn bg" id="btnAnalyzeBL" onclick="analyzeBLWithAI()" style="display:none;margin-top:10px">🤖 Analyser avec l'IA</button>
+      <button class="btn bs" onclick="closeM('mBLPhoto')" style="margin-top:8px">Annuler</button>
+    </div>
+
+    <!-- État : chargement IA -->
+    <div id="blPhotoLoading" style="display:none">
+      <div class="ai-loading">
+        <div class="ai-spinner"></div>
+        <div class="ai-loading-msg" id="blPhotoLoadingMsg">Analyse en cours…</div>
+        <div class="ai-loading-sub">L'IA lit votre bon de livraison</div>
+      </div>
+    </div>
+
+    <!-- État : résultat -->
+    <div id="blPhotoResult" style="display:none">
+      <div class="bl-photo-result-header">
+        <div class="mtit" style="margin:0">Articles détectés</div>
+        <span class="bl-photo-result-count" id="blPhotoResultCount">0 article</span>
+      </div>
+      <p style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.4">
+        Vérifiez les articles extraits avant de les ajouter au BL. Vous pourrez modifier les quantités après.
+      </p>
+      <div class="bl-photo-result-list ilist" id="blPhotoResultList"></div>
+      <button class="btn bg" onclick="confirmBLPhotoItems()" style="margin-top:12px">✅ Ajouter au BL</button>
+      <button class="btn bs" onclick="retakeBLPhoto()" style="margin-top:8px">↩ Reprendre les photos</button>
+      <button class="btn bs" onclick="closeM('mBLPhoto')" style="margin-top:8px">Annuler</button>
+    </div>
   </div>
 </div>
 

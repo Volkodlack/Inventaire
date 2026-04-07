@@ -933,3 +933,216 @@ function cancelBL() {
   renderBLPhase1();
   toast('🗑 BL annulé');
 }
+
+
+// ══════════════════════════════════════════════════════════
+// ── MODULE PHOTO BL (IA) — Lecture automatique du BL ─────
+// ══════════════════════════════════════════════════════════
+
+var blPhotos        = [];  // [{data: base64, mimeType: string}]
+var blPhotoExtracted = []; // articles extraits par l'IA
+
+// ── Ouvrir la modale ──────────────────────────────────────
+function openBLPhoto() {
+  blPhotos         = [];
+  blPhotoExtracted = [];
+  _showBLPhotoState('capture');
+  renderBLPhotoPages();
+  document.getElementById('mBLPhoto').classList.add('show');
+}
+
+function _showBLPhotoState(state) {
+  document.getElementById('blPhotoCapture').style.display = state === 'capture' ? 'block' : 'none';
+  document.getElementById('blPhotoLoading').style.display = state === 'loading' ? 'block' : 'none';
+  document.getElementById('blPhotoResult').style.display  = state === 'result'  ? 'block' : 'none';
+}
+
+// ── Rendu des vignettes ───────────────────────────────────
+function renderBLPhotoPages() {
+  var pagesEl     = document.getElementById('blPhotoPages');
+  var emptyEl     = document.getElementById('blPhotoEmptyMsg');
+  var analyzeBtn  = document.getElementById('btnAnalyzeBL');
+
+  if (!blPhotos.length) {
+    pagesEl.innerHTML      = '';
+    emptyEl.style.display  = 'block';
+    analyzeBtn.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display    = 'none';
+  analyzeBtn.style.display = 'block';
+
+  pagesEl.innerHTML = blPhotos.map(function(p, i) {
+    return '<div class="bl-photo-thumb">' +
+      '<img src="data:' + p.mimeType + ';base64,' + p.data + '" alt="Page ' + (i + 1) + '">' +
+      '<div class="bl-photo-thumb-lbl">Page ' + (i + 1) + '</div>' +
+      '<button class="bl-photo-thumb-del" onclick="removeBLPhoto(' + i + ')">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
+function removeBLPhoto(idx) {
+  blPhotos.splice(idx, 1);
+  renderBLPhotoPages();
+}
+
+// ── Lecture des fichiers ──────────────────────────────────
+function handleBLPhotoCam(input) {
+  _readBLPhotoFiles(input);
+}
+function handleBLPhotoGallery(input) {
+  _readBLPhotoFiles(input);
+}
+
+function _readBLPhotoFiles(input) {
+  if (!input.files || !input.files.length) return;
+  var files     = Array.from(input.files);
+  var remaining = files.length;
+
+  files.forEach(function(file) {
+    // Compresser l'image avant envoi à l'API
+    var img  = new Image();
+    var url  = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var canvas  = document.createElement('canvas');
+      var maxDim  = 1600;
+      var w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else       { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      canvas.width  = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      var dataUrl  = canvas.toDataURL('image/jpeg', 0.85);
+      blPhotos.push({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+      remaining--;
+      if (remaining === 0) {
+        input.value = '';
+        renderBLPhotoPages();
+      }
+    };
+    img.src = url;
+  });
+}
+
+// ── Analyse IA ────────────────────────────────────────────
+async function analyzeBLWithAI() {
+  if (!blPhotos.length) { toast('⚠️ Ajoutez au moins une photo'); return; }
+
+  _showBLPhotoState('loading');
+  document.getElementById('blPhotoLoadingMsg').textContent =
+    'Analyse de ' + blPhotos.length + ' page' + (blPhotos.length > 1 ? 's' : '') + ' en cours…';
+
+  // Construire le contenu : images + instruction
+  var content = [];
+  blPhotos.forEach(function(photo) {
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: photo.mimeType, data: photo.data }
+    });
+  });
+
+  content.push({
+    type: 'text',
+    text:
+      'Voici un bon de livraison en ' + blPhotos.length + ' page(s). ' +
+      'Extrais TOUS les articles présents dans ce document.\n' +
+      'Pour chaque article :\n' +
+      '- code : le code-barres EAN, référence produit ou code article visible (si aucun code lisible, génère une référence courte unique comme REF001, REF002…)\n' +
+      '- name : nom complet du produit tel qu\'il apparaît sur le document\n' +
+      '- qty  : quantité commandée ou livrée (nombre entier, utilise 1 si non précisé)\n' +
+      '- price: prix unitaire HT en euros (nombre décimal, utilise 0 si absent)\n\n' +
+      'Réponds UNIQUEMENT avec du JSON valide, sans markdown, sans backticks, sans commentaires, exactement dans ce format :\n' +
+      '{"articles":[{"code":"","name":"","qty":1,"price":0.00}]}'
+  });
+
+  try {
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages:   [{ role: 'user', content: content }]
+      })
+    });
+
+    var data = await response.json();
+    if (!response.ok) throw new Error(data.error ? data.error.message : 'Erreur API (' + response.status + ')');
+
+    // Extraire le texte de la réponse
+    var text = (data.content || [])
+      .filter(function(b) { return b.type === 'text'; })
+      .map(function(b) { return b.text; })
+      .join('');
+
+    // Nettoyer et parser le JSON
+    var clean = text.replace(/```json|```/gi, '').trim();
+    var match = clean.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Format de réponse invalide — réessayez');
+
+    var parsed   = JSON.parse(match[0]);
+    var articles = (parsed.articles || []).filter(function(a) { return a.name && String(a.name).trim(); });
+    if (!articles.length) throw new Error('Aucun article trouvé dans le document');
+
+    blPhotoExtracted = articles;
+    _showBLPhotoResult(articles);
+
+  } catch (e) {
+    _showBLPhotoState('capture');
+    toast('⚠️ ' + e.message);
+  }
+}
+
+function _showBLPhotoResult(articles) {
+  _showBLPhotoState('result');
+
+  var n   = articles.length;
+  document.getElementById('blPhotoResultCount').textContent = n + ' article' + (n > 1 ? 's' : '');
+
+  document.getElementById('blPhotoResultList').innerHTML = articles.map(function(it, i) {
+    var price = parseFloat(it.price) || 0;
+    var qty   = parseInt(it.qty)   || 1;
+    return '<div class="icard">' +
+      '<div class="iico">📦</div>' +
+      '<div class="iinf">' +
+        '<div class="iname">' + esc(it.name || ('Article ' + (i + 1))) + '</div>' +
+        '<div class="icode">' + esc(it.code || '—') + '</div>' +
+        '<div class="igrp">Qté : ' + qty + (price ? ' · ' + price.toFixed(2) + ' €/u' : '') + '</div>' +
+      '</div>' +
+      '<div class="irt"><div class="iqty">' + qty + '</div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function retakeBLPhoto() {
+  _showBLPhotoState('capture');
+  renderBLPhotoPages();
+}
+
+// ── Confirmer et ajouter au BL ────────────────────────────
+function confirmBLPhotoItems() {
+  var added = 0;
+  blPhotoExtracted.forEach(function(it) {
+    var code  = String(it.code  || '').trim();
+    var name  = String(it.name  || '').trim();
+    var qty   = parseInt(it.qty)   || 1;
+    var price = parseFloat(it.price) || 0;
+    if (!name) return;
+    if (!code) code = 'REF-' + Date.now() + '-' + added;
+
+    var existing = blItems.findIndex(function(i) { return i.code === code; });
+    if (existing >= 0) {
+      blItems[existing].qtyExpected += qty;
+    } else {
+      blItems.push({ code: code, name: name, qtyExpected: qty, price: price, qtyScanned: 0 });
+    }
+    added++;
+  });
+
+  closeM('mBLPhoto');
+  renderBLPhase1();
+  toast('✅ ' + added + ' article' + (added > 1 ? 's' : '') + ' importé' + (added > 1 ? 's' : '') + ' depuis le BL');
+}
