@@ -271,3 +271,163 @@ tr:last-child td { border-bottom: none; }
   -webkit-appearance: none; width: 20px; height: 20px;
   background: var(--blue); border-radius: 50%; cursor: pointer;
 }
+
+/* ── LOGO ── */
+.logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-img {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+.logo-text {
+  font-family: var(--sans);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--txt);
+  letter-spacing: 0.3px;
+}
+
+/* ── BL STEPS ── */
+.bl-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 4px;
+}
+.bl-step {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surf2);
+  border: 2px solid var(--brd);
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: .3s;
+  flex-shrink: 0;
+}
+.bl-step.on   { background: var(--cyan); border-color: var(--cyan); color: #000; box-shadow: 0 0 10px rgba(0,229,255,.4); }
+.bl-step.done { background: var(--green); border-color: var(--green); color: #000; }
+.bl-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--brd);
+  transition: .3s;
+  max-width: 60px;
+}
+.bl-step-line.done { background: var(--green); }
+.bl-step-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px;
+  margin-bottom: 18px;
+}
+.bl-step-labels span {
+  font-size: 9px;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  font-weight: 600;
+  flex: 1;
+  text-align: center;
+}
+.bl-step-labels span:first-child { text-align: left; }
+.bl-step-labels span:last-child  { text-align: right; }
+
+/* ── BL PROGRESS ── */
+.bl-progress-wrap {
+  margin-bottom: 14px;
+}
+.bl-progress-bar {
+  height: 6px;
+  background: var(--surf2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  border: 1px solid var(--brd);
+}
+.bl-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+.bl-progress-txt {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  text-align: center;
+}
+
+/* ── BL VERIFCARD ── */
+.bl-verifcard {
+  background: var(--surf);
+  border: 1px solid var(--brd);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  transition: .2s;
+}
+.bl-verifcard.ok   { border-color: rgba(0,230,118,.4); background: rgba(0,230,118,.05); }
+.bl-verifcard.over { border-color: rgba(255,77,109,.4); background: rgba(255,77,109,.05); }
+.bl-verifcard-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.bl-vicon  { font-size: 16px; flex-shrink: 0; }
+.bl-vname  { flex: 1; font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-vcount { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--cyan); flex-shrink: 0; }
+.bl-vbar {
+  height: 4px;
+  background: var(--surf2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.bl-vbar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width .3s;
+}
+
+/* ── BL SUMMARY ── */
+.bl-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  background: var(--surf);
+  border: 1px solid var(--brd);
+  border-radius: 12px;
+}
+.bl-summary-icon  { font-size: 28px; }
+.bl-summary-title { font-size: 16px; font-weight: 700; }
+.bl-total-wrap {
+  background: var(--surf2);
+  border: 1px solid var(--brd);
+  border-radius: 10px;
+  padding: 14px;
+}
+.bl-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+.bl-total-val {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green);
+}

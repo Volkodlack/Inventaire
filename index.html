@@ -5,15 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="InventPro">
+<meta name="apple-mobile-web-app-title" content="Inventaire">
 <meta name="theme-color" content="#07090f">
 <link rel="stylesheet" href="style.css">
-<title>InventPro</title>
+<title>Inventaire — Thierry Carles</title>
 </head>
 <body>
 
 <header>
-  <div class="logo">Invent<span>Pro</span></div>
+  <div class="logo-wrap">
+    <img src="logo2.png" alt="Thierry Carles" class="logo-img">
+    <span class="logo-text">Inventaire</span>
+  </div>
   <div class="hright">
     <div class="sdot spin" id="sdot" title="Connexion..."></div>
     <div class="hcount" id="hcount">—</div>
@@ -23,6 +26,7 @@
 <div class="tabs">
   <div class="tab on" onclick="goTab('scanner',this)">📷 Scanner</div>
   <div class="tab" onclick="goTab('inventaire',this)">📦 Inventaire</div>
+  <div class="tab" onclick="goTab('bl',this)">📋 BL</div>
   <div class="tab" onclick="goTab('export',this)">📤 Export</div>
 </div>
 
@@ -51,7 +55,6 @@
     <div class="ls-name" id="lsname"></div>
     <div class="ls-qty" id="lsqty"></div>
   </div>
-  <!-- Contrôles caméra avancés -->
   <div id="camControls" style="display:none">
     <div id="cameraSelectWrap" style="display:none">
       <label class="cam-ctrl-label">🔄 Objectif</label>
@@ -84,6 +87,88 @@
   <div class="ilist" id="ilist"></div>
 </div>
 
+<!-- PAGE BL -->
+<div class="page" id="page-bl">
+  <div class="bl-steps">
+    <div class="bl-step on" id="blStep1">1</div>
+    <div class="bl-step-line" id="blLine1"></div>
+    <div class="bl-step" id="blStep2">2</div>
+    <div class="bl-step-line" id="blLine2"></div>
+    <div class="bl-step" id="blStep3">3</div>
+  </div>
+  <div class="bl-step-labels">
+    <span>Saisie BL</span>
+    <span>Vérification</span>
+    <span>Validation</span>
+  </div>
+
+  <!-- PHASE 1 : Saisie -->
+  <div id="blPhase1">
+    <div class="sec-title" style="margin-bottom:12px">📋 Articles du bon de livraison</div>
+    <div id="blItemsList" class="ilist"></div>
+    <div id="blEmptyMsg" class="empty" style="padding:30px 20px">
+      <div class="eico">📋</div>
+      <div class="etit">BL vide</div>
+      <div class="esub">Ajoutez les articles attendus</div>
+    </div>
+    <button class="btn bp" style="margin-top:12px" onclick="openBLAdd()">➕ Ajouter un article au BL</button>
+    <button class="btn bg" id="btnStartVerif" onclick="startBLVerif()" style="display:none;margin-top:8px">🔍 Démarrer la vérification →</button>
+  </div>
+
+  <!-- PHASE 2 : Vérification -->
+  <div id="blPhase2" style="display:none">
+    <div class="bl-progress-wrap">
+      <div class="bl-progress-bar"><div class="bl-progress-fill" id="blProgressFill" style="width:0%"></div></div>
+      <div class="bl-progress-txt" id="blProgressTxt">0 / 0 articles vérifiés</div>
+    </div>
+    <div class="cam-wrap">
+      <video id="blVid" playsinline autoplay muted></video>
+      <div class="overlay" id="blScanOverlay" style="display:none">
+        <div class="frame"><div class="sline"></div>
+          <div class="c tl"></div><div class="c tr"></div>
+          <div class="c bl"></div><div class="c br"></div>
+        </div>
+      </div>
+      <div class="cam-off" id="blCamOff"><div class="icon">📷</div><p>Caméra inactive</p></div>
+    </div>
+    <div class="status" id="blStatus">Appuyez sur Démarrer</div>
+    <div class="lscan" id="blLscan">
+      <div class="ls-lbl">Dernier scan BL</div>
+      <div class="ls-row">
+        <div class="ls-code" id="blLscode"></div>
+        <span class="ls-badge" id="blLsbadge"></span>
+      </div>
+      <div class="ls-name" id="blLsname"></div>
+    </div>
+    <button class="btn bp" id="blBtnStart" onclick="startBLCam()">📷 Démarrer le scanner</button>
+    <button class="btn bs" id="blBtnStop" onclick="stopBLCam()" style="display:none">⏹ Arrêter</button>
+    <div class="manual-section">
+      <div class="sec-title">Saisie manuelle</div>
+      <div class="manual-wrap">
+        <input class="manual-input" id="blManInput" placeholder="Code-barres..." type="tel"/>
+        <button class="btn bp manualbtn" onclick="blManualScan()">✔</button>
+      </div>
+    </div>
+    <div class="sec-title" style="margin:16px 0 8px">État de la livraison</div>
+    <div id="blVerifList" class="ilist"></div>
+    <button class="btn bg" onclick="goToPhase3()" style="margin-top:12px">✅ Terminer la vérification →</button>
+    <button class="btn bs" onclick="cancelBL()" style="margin-top:8px">↩ Annuler le BL</button>
+  </div>
+
+  <!-- PHASE 3 : Confirmation -->
+  <div id="blPhase3" style="display:none">
+    <div class="bl-summary-header">
+      <div class="bl-summary-icon">📦</div>
+      <div class="bl-summary-title">Récapitulatif livraison</div>
+    </div>
+    <div id="blSummaryList" class="ilist" style="margin-bottom:12px"></div>
+    <div class="bl-total-wrap" id="blTotalWrap"></div>
+    <button class="btn bg" onclick="addBLToInventory()" style="margin-top:12px">✅ Ajouter tout à l'inventaire</button>
+    <button class="btn bs" onclick="goToPhase2()" style="margin-top:8px">↩ Retour à la vérification</button>
+    <button class="btn br2" onclick="cancelBL()" style="margin-top:8px">🗑 Annuler et vider le BL</button>
+  </div>
+</div>
+
 <!-- PAGE EXPORT -->
 <div class="page" id="page-export">
   <div class="sec-title">Aperçu de l'inventaire</div>
@@ -102,7 +187,7 @@
   <button class="btn br2 danger-btn" onclick="clearAll()">🗑 Effacer l'inventaire</button>
 </div>
 
-<!-- MODAL NOUVEAU PRODUIT -->
+<!-- MODAL NOUVEAU PRODUIT (scanner standard) -->
 <div class="mover" id="mNew">
   <div class="modal">
     <div class="mhandle"></div>
@@ -144,9 +229,57 @@
   </div>
 </div>
 
+<!-- MODAL AJOUT ARTICLE BL -->
+<div class="mover" id="mBLAdd">
+  <div class="modal">
+    <div class="mhandle"></div>
+    <div class="mtit">➕ Article du BL</div>
+    <div class="fg">
+      <label class="flbl">Code-barres *</label>
+      <div class="manual-wrap">
+        <input class="finp" id="blCode" placeholder="Ex: 3017620422003" type="tel" autocomplete="off"/>
+        <button class="btn bp manualbtn" onclick="startBLAddCam()" title="Scanner">📷</button>
+      </div>
+    </div>
+    <div class="fg">
+      <label class="flbl">Nom du produit *</label>
+      <input class="finp" id="blName" placeholder="Ex: Radiateur Acova" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="flbl">Quantité attendue *</label>
+      <input class="finp" id="blQtyExp" type="number" min="1" value="1" placeholder="1"/>
+    </div>
+    <div class="fg">
+      <label class="flbl">Prix d'achat unitaire (€)</label>
+      <input class="finp" id="blPriceIn" type="number" step="0.01" min="0" placeholder="0.00"/>
+    </div>
+    <button class="btn bp" onclick="saveBLItem()">✅ Ajouter au BL</button>
+    <button class="btn bs" onclick="closeM('mBLAdd')">Annuler</button>
+  </div>
+</div>
+
+<!-- MINI CAM MODAL pour scan code BL -->
+<div class="mover" id="mBLScan">
+  <div class="modal">
+    <div class="mhandle"></div>
+    <div class="mtit">📷 Scanner le code-barres</div>
+    <div class="cam-wrap" style="margin-bottom:12px">
+      <video id="blAddVid" playsinline autoplay muted></video>
+      <div class="overlay" id="blAddOverlay" style="display:none">
+        <div class="frame"><div class="sline"></div>
+          <div class="c tl"></div><div class="c tr"></div>
+          <div class="c bl"></div><div class="c br"></div>
+        </div>
+      </div>
+      <div class="cam-off" id="blAddCamOff"><div class="icon">📷</div><p>Démarrage...</p></div>
+    </div>
+    <div class="status" id="blAddStatus">Pointez le code-barres</div>
+    <button class="btn bs" onclick="stopBLAddCam()">Annuler</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="app.js"></script>
