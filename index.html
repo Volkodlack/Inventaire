@@ -5,17 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Inventaire">
-<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-title" content="InventPro">
+<meta name="theme-color" content="#07090f">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="style.css">
-<title>Inventaire — Thierry Carles</title>
+<title>InventPro — Thierry Carles</title>
 </head>
 <body>
 
 <header>
   <div class="logo-wrap">
     <img src="logo2.png" alt="Thierry Carles" class="logo-img">
-    <span class="logo-text">Inventaire</span>
   </div>
   <div class="hright">
     <div class="sdot spin" id="sdot" title="Connexion..."></div>
@@ -24,71 +24,16 @@
 </header>
 
 <div class="tabs">
-  <div class="tab on" onclick="goTab('scanner',this)">📷 Scanner</div>
-  <div class="tab" onclick="goTab('inventaire',this)">📦 Inventaire</div>
-  <div class="tab" onclick="goTab('bl',this)">📋 BL</div>
-  <div class="tab" onclick="goTab('export',this)">📤 Export</div>
+  <div class="tab on"  onclick="goTab('bl',this)">📋 BL</div>
+  <div class="tab"     onclick="goTab('sortie',this)">📤 Sortie</div>
+  <div class="tab"     onclick="goTab('inventaire',this)">📦 Inventaire</div>
+  <div class="tab"     onclick="goTab('export',this)">📊 Export</div>
 </div>
 
-<!-- PAGE SCANNER -->
-<div class="page on" id="page-scanner">
-  <div class="cam-wrap">
-    <video id="vid" playsinline autoplay muted></video>
-    <div class="overlay" id="scanOverlay" style="display:none">
-      <div class="frame">
-        <div class="sline"></div>
-        <div class="c tl"></div><div class="c tr"></div>
-        <div class="c bl"></div><div class="c br"></div>
-      </div>
-    </div>
-    <div class="cam-off" id="camOff">
-      <div class="icon">📷</div><p>Caméra inactive</p>
-    </div>
-  </div>
-  <div class="status" id="status">Appuyez sur Démarrer</div>
-  <div class="lscan" id="lscan">
-    <div class="ls-lbl">Dernier scan</div>
-    <div class="ls-row">
-      <div class="ls-code" id="lscode"></div>
-      <span class="ls-badge" id="lsbadge"></span>
-    </div>
-    <div class="ls-name" id="lsname"></div>
-    <div class="ls-qty" id="lsqty"></div>
-  </div>
-  <div id="camControls" style="display:none">
-    <div id="cameraSelectWrap" style="display:none">
-      <label class="cam-ctrl-label">🔄 Objectif</label>
-      <select id="cameraSelect" onchange="switchCamera(this.value)"></select>
-    </div>
-    <div id="zoomWrap" style="display:none">
-      <label class="cam-ctrl-label">🔍 Zoom : <span id="zoomVal">1×</span></label>
-      <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1" oninput="applyZoom(this.value)">
-    </div>
-  </div>
-  <button class="btn bp" id="btnStart" onclick="startCam()">📷 Démarrer le scanner</button>
-  <button class="btn bs" id="btnStop" onclick="stopCam()" style="display:none">⏹ Arrêter</button>
-  <div class="manual-section">
-    <div class="sec-title">Saisie manuelle</div>
-    <div class="manual-wrap">
-      <input class="manual-input" id="manInput" placeholder="Ex: 3017620422003" type="tel"/>
-      <button class="btn bp manualbtn" onclick="manualScan()">✔</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE INVENTAIRE -->
-<div class="page" id="page-inventaire">
-  <div class="stats">
-    <div class="scard"><div class="sv" id="sref">0</div><div class="sl">Références</div></div>
-    <div class="scard"><div class="sv" id="sqty">0</div><div class="sl">Articles</div></div>
-    <div class="scard"><div class="sv" id="sval">0€</div><div class="sl">Valeur</div></div>
-  </div>
-  <input class="search" id="search" placeholder="🔍 Rechercher..." oninput="renderList()"/>
-  <div class="ilist" id="ilist"></div>
-</div>
-
-<!-- PAGE BL -->
-<div class="page" id="page-bl">
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE BL                                                 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page on" id="page-bl">
   <div class="bl-steps">
     <div class="bl-step on" id="blStep1">1</div>
     <div class="bl-step-line" id="blLine1"></div>
@@ -97,14 +42,11 @@
     <div class="bl-step" id="blStep3">3</div>
   </div>
   <div class="bl-step-labels">
-    <span>Saisie BL</span>
-    <span>Vérification</span>
-    <span>Validation</span>
+    <span>Saisie BL</span><span>Vérification</span><span>Validation</span>
   </div>
 
-  <!-- PHASE 1 : Saisie -->
+  <!-- PHASE 1 -->
   <div id="blPhase1">
-    <!-- Bannière photo IA -->
     <div class="bl-photo-banner">
       <div class="bl-photo-banner-ico">🤖</div>
       <div class="bl-photo-banner-txt">
@@ -113,7 +55,6 @@
       </div>
     </div>
     <button class="btn bp" style="margin-bottom:8px" onclick="openBLPhoto()">📸 Scanner le BL en photo (IA)</button>
-
     <div class="sec-title" style="margin-bottom:8px">📋 Articles du bon de livraison</div>
     <div id="blItemsList" class="ilist"></div>
     <div id="blEmptyMsg" class="empty" style="padding:24px 20px">
@@ -125,7 +66,7 @@
     <button class="btn bg" id="btnStartVerif" onclick="startBLVerif()" style="display:none;margin-top:8px">🔍 Démarrer la vérification →</button>
   </div>
 
-  <!-- PHASE 2 : Vérification -->
+  <!-- PHASE 2 -->
   <div id="blPhase2" style="display:none">
     <div class="bl-progress-wrap">
       <div class="bl-progress-bar"><div class="bl-progress-fill" id="blProgressFill" style="width:0%"></div></div>
@@ -165,7 +106,7 @@
     <button class="btn bs" onclick="cancelBL()" style="margin-top:8px">↩ Annuler le BL</button>
   </div>
 
-  <!-- PHASE 3 : Confirmation -->
+  <!-- PHASE 3 -->
   <div id="blPhase3" style="display:none">
     <div class="bl-summary-header">
       <div class="bl-summary-icon">📦</div>
@@ -179,7 +120,157 @@
   </div>
 </div>
 
-<!-- PAGE EXPORT -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE SORTIE DE STOCK                                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page" id="page-sortie">
+  <div class="sortie-header-card">
+    <div class="sortie-header-icon">📤</div>
+    <div class="sortie-header-txt">
+      <strong>Sortie de stock</strong>
+      <span>Scannez un article pour le retirer du stock</span>
+    </div>
+  </div>
+
+  <div class="cam-wrap">
+    <video id="sortieVid" playsinline autoplay muted></video>
+    <div class="overlay" id="sortieScanOverlay" style="display:none">
+      <div class="frame"><div class="sline"></div>
+        <div class="c tl"></div><div class="c tr"></div>
+        <div class="c bl"></div><div class="c br"></div>
+      </div>
+    </div>
+    <div class="cam-off" id="sortieCamOff"><div class="icon">📷</div><p>Caméra inactive</p></div>
+  </div>
+  <div class="status" id="sortieStatus">Appuyez sur Démarrer</div>
+
+  <div class="lscan" id="sortieLscan">
+    <div class="ls-lbl">Dernier retrait</div>
+    <div class="ls-row">
+      <div class="ls-code" id="sortieLscode"></div>
+      <span class="ls-badge" id="sortieLsbadge"></span>
+    </div>
+    <div class="ls-name" id="sortieLsname"></div>
+    <div class="ls-qty" id="sortieLsqty"></div>
+  </div>
+
+  <button class="btn bp" id="sortieBtnStart" onclick="startSortieCam()">📷 Démarrer le scanner</button>
+  <button class="btn bs" id="sortieBtnStop" onclick="stopSortieCam()" style="display:none">⏹ Arrêter</button>
+
+  <div class="manual-section">
+    <div class="sec-title">Saisie manuelle</div>
+    <div class="manual-wrap">
+      <input class="manual-input" id="sortieManInput" placeholder="Code-barres..." type="tel"/>
+      <button class="btn bp manualbtn" onclick="sortieManualScan()">✔</button>
+    </div>
+  </div>
+
+  <!-- Historique des sorties de la session -->
+  <div style="margin-top:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec-title" style="margin:0">Sorties de cette session</div>
+      <button class="btn bs" style="width:auto;padding:6px 12px;font-size:11px;margin:0" onclick="clearSortieHistory()">Effacer</button>
+    </div>
+    <div id="sortieHistory" class="ilist">
+      <div class="empty" style="padding:24px 0">
+        <div class="eico">📤</div>
+        <div class="etit">Aucune sortie</div>
+        <div class="esub">Les retraits apparaîtront ici</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE INVENTAIRE (vérification physique)                 -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page" id="page-inventaire">
+
+  <!-- Mode IDLE : pas d'inventaire en cours -->
+  <div id="invIdle">
+    <div class="inv-hero">
+      <div class="inv-hero-icon">📦</div>
+      <div class="inv-hero-title">Inventaire physique</div>
+      <div class="inv-hero-sub">Scannez tous vos articles pour vérifier les quantités en stock. Un rapport comparatif sera généré à la fin.</div>
+    </div>
+    <button class="btn bg" onclick="startInventaire()">▶ Démarrer l'inventaire</button>
+  </div>
+
+  <!-- Mode ACTIF : inventaire en cours -->
+  <div id="invActive" style="display:none">
+    <div class="inv-progress-band">
+      <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
+      <div class="inv-progress-txt" id="invProgressTxt">0 article(s) scanné(s)</div>
+    </div>
+
+    <div class="cam-wrap">
+      <video id="invVid" playsinline autoplay muted></video>
+      <div class="overlay" id="invScanOverlay" style="display:none">
+        <div class="frame"><div class="sline"></div>
+          <div class="c tl"></div><div class="c tr"></div>
+          <div class="c bl"></div><div class="c br"></div>
+        </div>
+      </div>
+      <div class="cam-off" id="invCamOff"><div class="icon">📷</div><p>Caméra inactive</p></div>
+    </div>
+    <div class="status" id="invStatus">Appuyez sur Démarrer</div>
+
+    <div class="lscan" id="invLscan">
+      <div class="ls-lbl">Dernier scan inventaire</div>
+      <div class="ls-row">
+        <div class="ls-code" id="invLscode"></div>
+        <span class="ls-badge" id="invLsbadge"></span>
+      </div>
+      <div class="ls-name" id="invLsname"></div>
+      <div class="ls-qty" id="invLsqty"></div>
+    </div>
+
+    <button class="btn bp" id="invBtnStart" onclick="startInvCam()">📷 Démarrer le scanner</button>
+    <button class="btn bs" id="invBtnStop" onclick="stopInvCam()" style="display:none">⏹ Arrêter</button>
+
+    <div class="manual-section">
+      <div class="sec-title">Saisie manuelle</div>
+      <div class="manual-wrap">
+        <input class="manual-input" id="invManInput" placeholder="Code-barres..." type="tel"/>
+        <button class="btn bp manualbtn" onclick="invManualScan()">✔</button>
+      </div>
+    </div>
+
+    <!-- Articles scannés pendant l'inventaire -->
+    <div style="margin-top:18px">
+      <div class="sec-title">Articles scannés</div>
+      <div id="invScannedList" class="ilist"></div>
+    </div>
+
+    <button class="btn bg" onclick="finishInventaire()" style="margin-top:16px">✅ Terminer et générer le rapport</button>
+    <button class="btn br2" onclick="cancelInventaire()" style="margin-top:8px">🗑 Annuler l'inventaire</button>
+  </div>
+
+  <!-- Mode RAPPORT -->
+  <div id="invReport" style="display:none">
+    <div class="inv-report-header">
+      <div>📋 Rapport d'inventaire</div>
+      <div id="invReportDate" style="font-size:11px;color:var(--dim)"></div>
+    </div>
+
+    <!-- Résumé -->
+    <div class="inv-summary-grid" id="invSummaryGrid"></div>
+
+    <!-- Liste des écarts -->
+    <div class="sec-title" style="margin:16px 0 8px">Détail des écarts</div>
+    <div id="invReportList" class="ilist"></div>
+
+    <!-- Total financier -->
+    <div class="bl-total-wrap" id="invReportTotal" style="margin-top:16px"></div>
+
+    <button class="btn bg" onclick="applyInventaire()" style="margin-top:16px">✅ Appliquer les corrections au stock</button>
+    <button class="btn bs" onclick="resetInventaire()" style="margin-top:8px">↩ Nouvel inventaire</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE EXPORT                                             -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <div class="page" id="page-export">
   <div class="sec-title">Aperçu de l'inventaire</div>
   <div class="tbl-wrap">
@@ -193,51 +284,12 @@
   <div class="sec-title">Exporter</div>
   <input class="einp" id="emailInp" type="email" placeholder="votre@email.com"/>
   <button class="btn bg" onclick="exportMail()">📧 Envoyer par mail</button>
-  <button class="btn bs" onclick="downloadCSV()">⬇️ Télécharger Excel (.csv)</button>
+  <button class="btn bp" onclick="downloadXLSX()">⬇️ Télécharger Excel (.xlsx)</button>
+  <button class="btn bs" onclick="downloadCSV()">⬇️ Télécharger CSV</button>
   <button class="btn br2 danger-btn" onclick="clearAll()">🗑 Effacer l'inventaire</button>
 </div>
 
-<!-- MODAL NOUVEAU PRODUIT -->
-<div class="mover" id="mNew">
-  <div class="modal">
-    <div class="mhandle"></div>
-    <div class="mtit">✨ Nouveau produit</div>
-    <div class="msub" id="mNewCode">CODE: —</div>
-    <div class="fg">
-      <label class="flbl">Nom *</label>
-      <input class="finp" id="fName" placeholder="Ex: Café 250g" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="flbl">Groupe / Catégorie</label>
-      <input class="finp" id="fGroup" placeholder="Ex: Alimentaire" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="flbl">Prix unitaire (€)</label>
-      <input class="finp" id="fPrice" type="number" step="0.01" min="0" placeholder="0.00"/>
-    </div>
-    <button class="btn bp" id="btnSaveNew" onclick="saveNew()">✅ Enregistrer</button>
-    <button class="btn bs" onclick="closeM('mNew')">Annuler</button>
-  </div>
-</div>
-
-<!-- MODAL DETAIL -->
-<div class="mover" id="mDetail">
-  <div class="modal">
-    <div class="mhandle"></div>
-    <div class="mtit" id="dName"></div>
-    <div class="msub" id="dCode"></div>
-    <div class="drow"><span class="dlbl">Groupe</span><span class="dval" id="dGrp">—</span></div>
-    <div class="drow"><span class="dlbl">Prix unitaire</span><span class="dval" id="dPrc">—</span></div>
-    <div class="qctrl">
-      <button class="qbtn" onclick="chQty(-1)">−</button>
-      <div class="qdisp" id="dQty">0</div>
-      <button class="qbtn" onclick="chQty(1)">+</button>
-    </div>
-    <button class="btn bp" id="btnSaveDet" onclick="saveDet()">💾 Enregistrer</button>
-    <button class="btn br2" onclick="delItem()">🗑 Supprimer</button>
-    <button class="btn bs" onclick="closeM('mDetail')">Fermer</button>
-  </div>
-</div>
+<!-- ═══════════════════════ MODALS ═══════════════════════════ -->
 
 <!-- MODAL AJOUT ARTICLE BL -->
 <div class="mover" id="mBLAdd">
@@ -292,8 +344,6 @@
 <div class="mover" id="mBLPhoto">
   <div class="modal bl-photo-modal">
     <div class="mhandle"></div>
-
-    <!-- État : capture des pages -->
     <div id="blPhotoCapture">
       <div class="mtit">📸 Photographier le BL</div>
       <p style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.5">
@@ -305,7 +355,6 @@
         <div style="font-size:13px;font-weight:600;color:var(--txt)">Aucune page ajoutée</div>
         <div style="font-size:11px;margin-top:4px">Prenez une photo ou importez depuis la galerie</div>
       </div>
-      <!-- Inputs fichiers (hidden) -->
       <input type="file" id="blPhotoCamInput"     accept="image/*" capture="environment" style="display:none" onchange="handleBLPhotoCam(this)">
       <input type="file" id="blPhotoGalleryInput" accept="image/*" multiple           style="display:none" onchange="handleBLPhotoGallery(this)">
       <div class="bl-photo-actions" style="margin-top:10px">
@@ -315,8 +364,6 @@
       <button class="btn bg" id="btnAnalyzeBL" onclick="analyzeBLWithAI()" style="display:none;margin-top:10px">🤖 Analyser avec l'IA</button>
       <button class="btn bs" onclick="closeM('mBLPhoto')" style="margin-top:8px">Annuler</button>
     </div>
-
-    <!-- État : chargement IA -->
     <div id="blPhotoLoading" style="display:none">
       <div class="ai-loading">
         <div class="ai-spinner"></div>
@@ -324,15 +371,13 @@
         <div class="ai-loading-sub">L'IA lit votre bon de livraison</div>
       </div>
     </div>
-
-    <!-- État : résultat -->
     <div id="blPhotoResult" style="display:none">
       <div class="bl-photo-result-header">
         <div class="mtit" style="margin:0">Articles détectés</div>
         <span class="bl-photo-result-count" id="blPhotoResultCount">0 article</span>
       </div>
       <p style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.4">
-        Vérifiez les articles extraits avant de les ajouter au BL. Vous pourrez modifier les quantités après.
+        Vérifiez les articles extraits avant de les ajouter au BL.
       </p>
       <div class="bl-photo-result-list ilist" id="blPhotoResultList"></div>
       <button class="btn bg" onclick="confirmBLPhotoItems()" style="margin-top:12px">✅ Ajouter au BL</button>
@@ -342,10 +387,47 @@
   </div>
 </div>
 
+<!-- MODAL NOUVEAU PRODUIT (inventaire physique — article inconnu) -->
+<div class="mover" id="mNewInv">
+  <div class="modal">
+    <div class="mhandle"></div>
+    <div class="mtit">✨ Nouveau produit inconnu</div>
+    <div class="msub" id="mNewInvCode">CODE: —</div>
+    <p style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.5">Ce code-barres n'existe pas encore dans votre stock. Créez la référence pour continuer.</p>
+    <div class="fg">
+      <label class="flbl">Nom *</label>
+      <input class="finp" id="fInvName" placeholder="Ex: Café 250g" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="flbl">Groupe / Catégorie</label>
+      <input class="finp" id="fInvGroup" placeholder="Ex: Alimentaire" autocomplete="off"/>
+    </div>
+    <div class="fg">
+      <label class="flbl">Prix unitaire (€)</label>
+      <input class="finp" id="fInvPrice" type="number" step="0.01" min="0" placeholder="0.00"/>
+    </div>
+    <button class="btn bp" onclick="saveNewInvProduct()">✅ Créer et continuer</button>
+    <button class="btn bs" onclick="closeM('mNewInv')">Ignorer</button>
+  </div>
+</div>
+
+<!-- MODAL SORTIE — article non trouvé -->
+<div class="mover" id="mSortieUnknown">
+  <div class="modal">
+    <div class="mhandle"></div>
+    <div class="mtit">❌ Article introuvable</div>
+    <div class="msub" id="mSortieUnknownCode"></div>
+    <p style="font-size:13px;color:var(--dim);margin-bottom:14px">Ce code-barres n'est pas dans votre stock.</p>
+    <button class="btn bs" onclick="closeM('mSortieUnknown')">Fermer</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<!-- SheetJS pour export Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
