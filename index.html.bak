@@ -343,17 +343,4 @@
     </div>
   </div>
 </div>
-
-<!-- TOAST -->
-<div id="toast" style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none"></div>
-
-<style>
-#toast.show { opacity: 1 !important; }
-</style>
-
-<!-- Firebase 9 compat -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<!-- App -->
-<script src="app.js"></script>
 </body>
