@@ -157,7 +157,9 @@ header {
 .icode { font-family: var(--mono); font-size: 9px; color: var(--dim); margin-top: 1px; }
 .igrp  { font-size: 10px; color: var(--purple); margin-top: 2px; font-weight: 500; }
 .irt   { text-align: right; flex-shrink: 0; }
-.iqty  { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--green); }
+.iqty       { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--green); }
+.iqty.warn  { color: #f0a500; }
+.iqty.red   { color: var(--red); }
 .iprc  { font-size: 10px; color: var(--dim); font-family: var(--mono); margin-top: 1px; }
 
 /* ── EMPTY STATE ── */
@@ -284,6 +286,10 @@ tr:last-child td { border-bottom: none; }
 .bl-total-wrap { background: var(--surf2); border: 1px solid var(--brd); border-radius: 10px; padding: 14px; }
 .bl-total { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--dim); }
 .bl-total-val { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--cyan); }
+.bl-recap-stats { background: var(--surf2); border: 1px solid var(--brd); border-radius: 10px; padding: 4px 14px; }
+.bl-stat { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--brd); font-size: 13px; color: var(--dim); }
+.bl-stat:last-child { border-bottom: none; }
+.bl-stat strong { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--cyan); }
 
 /* ── PHOTO BL ── */
 .bl-photo-banner {
@@ -361,3 +367,45 @@ tr:last-child td { border-bottom: none; }
 .inv-stat-card.err  .inv-stat-val { color: var(--red); }
 .inv-stat-card.warn .inv-stat-val { color: var(--cyan); }
 .inv-stat-lbl { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+
+/* ── PAGE STOCK ─────────────────────────────────────────── */
+.stock-topbar { margin-bottom: 10px; }
+.stock-search-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surf2); border: 1px solid var(--brd); border-radius: 10px;
+  padding: 0 12px; height: 44px;
+}
+.stock-search-ico { font-size: 16px; flex-shrink: 0; }
+.stock-search-inp {
+  flex: 1; background: none; border: none; outline: none;
+  font-size: 14px; color: var(--txt); font-family: var(--sans);
+}
+.stock-search-inp::placeholder { color: var(--dim); }
+.stock-search-clear {
+  background: none; border: none; color: var(--dim); cursor: pointer;
+  font-size: 14px; padding: 0; line-height: 1;
+}
+.stock-sort-bar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.stock-sort-lbl { font-size: 11px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-right: 2px; }
+.sort-btn {
+  font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 20px;
+  border: 1px solid var(--brd); background: var(--surf2); color: var(--dim);
+  cursor: pointer; transition: .15s; white-space: nowrap; font-family: var(--sans);
+}
+.sort-btn.on { background: var(--cyan); border-color: var(--cyan); color: #fff; }
+.sort-btn .sort-arrow { margin-left: 3px; font-size: 9px; }
+.stock-count { font-size: 11px; color: var(--dim); text-align: right; margin-bottom: 6px; }
+
+/* ── DOUCHETTE ──────────────────────────────────────────── */
+.douchette-toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: var(--surf2); border: 1px solid var(--cyan); border-radius: 10px;
+  padding: 10px 18px; display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 15px; color: var(--cyan);
+  box-shadow: 0 4px 20px rgba(0,0,0,.4); z-index: 999; pointer-events: none;
+  animation: fadeInUp .15s ease;
+}
+.douchette-ico { font-size: 18px; }

@@ -26,6 +26,7 @@
 <div class="tabs">
   <div class="tab on"  onclick="goTab('bl',this)">📋 BL</div>
   <div class="tab"     onclick="goTab('sortie',this)">📤 Sortie</div>
+  <div class="tab"     onclick="goTab('stock',this)">🗃️ Stock</div>
   <div class="tab"     onclick="goTab('inventaire',this)">📦 Inventaire</div>
   <div class="tab"     onclick="goTab('export',this)">📊 Export</div>
 </div>
@@ -38,43 +39,13 @@
     <div class="bl-step on" id="blStep1">1</div>
     <div class="bl-step-line" id="blLine1"></div>
     <div class="bl-step" id="blStep2">2</div>
-    <div class="bl-step-line" id="blLine2"></div>
-    <div class="bl-step" id="blStep3">3</div>
   </div>
   <div class="bl-step-labels">
-    <span>Saisie BL</span><span>Vérification</span><span>Validation</span>
+    <span>Scan</span><span>Validation</span>
   </div>
 
-  <!-- PHASE 1 -->
+  <!-- PHASE 1 : SCAN -->
   <div id="blPhase1">
-    <div class="bl-photo-banner">
-      <div class="bl-photo-banner-ico">🤖</div>
-      <div class="bl-photo-banner-txt">
-        <strong>Photographier le bon de livraison</strong>
-        <span>L'IA extrait automatiquement tous les articles (multi-pages)</span>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <button class="btn bp" style="flex:1" onclick="openBLPhoto()">📸 Scanner le BL en photo (IA)</button>
-      <button class="btn bs" style="width:44px;font-size:18px;padding:0" onclick="openAPIKeyModal()" title="Configurer la clé API Anthropic">⚙️</button>
-    </div>
-    <div class="sec-title" style="margin-bottom:8px">📋 Articles du bon de livraison</div>
-    <div id="blItemsList" class="ilist"></div>
-    <div id="blEmptyMsg" class="empty" style="padding:24px 20px">
-      <div class="eico">📋</div>
-      <div class="etit">BL vide</div>
-      <div class="esub">Photographiez le BL ou ajoutez manuellement</div>
-    </div>
-    <button class="btn bs" style="margin-top:8px" onclick="openBLAdd()">➕ Ajouter un article manuellement</button>
-    <button class="btn bg" id="btnStartVerif" onclick="startBLVerif()" style="display:none;margin-top:8px">🔍 Démarrer la vérification →</button>
-  </div>
-
-  <!-- PHASE 2 -->
-  <div id="blPhase2" style="display:none">
-    <div class="bl-progress-wrap">
-      <div class="bl-progress-bar"><div class="bl-progress-fill" id="blProgressFill" style="width:0%"></div></div>
-      <div class="bl-progress-txt" id="blProgressTxt">0 / 0 articles vérifiés</div>
-    </div>
     <div class="cam-wrap">
       <video id="blVid" playsinline autoplay muted></video>
       <div class="overlay" id="blScanOverlay" style="display:none">
@@ -86,14 +57,6 @@
       <div class="cam-off" id="blCamOff"><div class="icon">📷</div><p>Caméra inactive</p></div>
     </div>
     <div class="status" id="blStatus">Appuyez sur Démarrer</div>
-    <div class="lscan" id="blLscan">
-      <div class="ls-lbl">Dernier scan BL</div>
-      <div class="ls-row">
-        <div class="ls-code" id="blLscode"></div>
-        <span class="ls-badge" id="blLsbadge"></span>
-      </div>
-      <div class="ls-name" id="blLsname"></div>
-    </div>
     <button class="btn bp" id="blBtnStart" onclick="startBLCam()">📷 Démarrer le scanner</button>
     <button class="btn bs" id="blBtnStop" onclick="stopBLCam()" style="display:none">⏹ Arrêter</button>
     <div class="manual-section">
@@ -103,23 +66,59 @@
         <button class="btn bp manualbtn" onclick="blManualScan()">✔</button>
       </div>
     </div>
-    <div class="sec-title" style="margin:16px 0 8px">État de la livraison</div>
-    <div id="blVerifList" class="ilist"></div>
-    <button class="btn bg" onclick="goToPhase3()" style="margin-top:12px">✅ Terminer la vérification →</button>
-    <button class="btn bs" onclick="cancelBL()" style="margin-top:8px">↩ Annuler le BL</button>
+    <div class="sec-title" style="margin:16px 0 8px">Articles scannés</div>
+    <div id="blScanList" class="ilist"></div>
+    <div id="blScanEmptyMsg" class="empty" style="padding:24px 20px">
+      <div class="eico">📦</div>
+      <div class="etit">Aucun article</div>
+      <div class="esub">Scannez les articles du bon de livraison</div>
+    </div>
+    <button class="btn bg" id="btnBLRecap" onclick="goToBLRecap()" style="display:none;margin-top:8px">📋 Voir le récapitulatif →</button>
+    <button class="btn br2" onclick="cancelBL()" style="margin-top:8px">🗑 Annuler le BL</button>
   </div>
 
-  <!-- PHASE 3 -->
-  <div id="blPhase3" style="display:none">
+  <!-- PHASE 2 : RECAP -->
+  <div id="blPhase2" style="display:none">
     <div class="bl-summary-header">
       <div class="bl-summary-icon">📦</div>
       <div class="bl-summary-title">Récapitulatif livraison</div>
     </div>
-    <div id="blSummaryList" class="ilist" style="margin-bottom:12px"></div>
-    <div class="bl-total-wrap" id="blTotalWrap"></div>
-    <button class="btn bg" onclick="addBLToInventory()" style="margin-top:12px">✅ Ajouter tout à l'inventaire</button>
-    <button class="btn bs" onclick="goToPhase2()" style="margin-top:8px">↩ Retour à la vérification</button>
+    <div id="blRecapStats" class="bl-recap-stats" style="margin-bottom:12px"></div>
+    <div id="blRecapList" class="ilist" style="margin-bottom:12px"></div>
+    <button class="btn bg" onclick="addBLToInventory()">✅ Valider et intégrer au stock</button>
+    <button class="btn bs" onclick="goBackToScan()" style="margin-top:8px">↩ Modifier</button>
     <button class="btn br2" onclick="cancelBL()" style="margin-top:8px">🗑 Annuler et vider le BL</button>
+  </div>
+</div>
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE STOCK                                              -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page" id="page-stock">
+
+  <!-- Barre de recherche -->
+  <div class="stock-topbar">
+    <div class="stock-search-wrap">
+      <span class="stock-search-ico">🔍</span>
+      <input class="stock-search-inp" id="stockSearch" placeholder="Nom, code-barres…" oninput="renderStock()" autocomplete="off" type="search"/>
+      <button class="stock-search-clear" id="stockSearchClear" onclick="clearStockSearch()" style="display:none">✕</button>
+    </div>
+  </div>
+
+  <!-- Barre de tri -->
+  <div class="stock-sort-bar">
+    <span class="stock-sort-lbl">Trier :</span>
+    <button class="sort-btn on" id="sortBtn-name"   onclick="setStockSort('name')">Nom <span class="sort-arrow">▲</span></button>
+    <button class="sort-btn"   id="sortBtn-group"  onclick="setStockSort('group')">Catégorie <span class="sort-arrow"></span></button>
+    <button class="sort-btn"   id="sortBtn-qty"    onclick="setStockSort('qty')">Qté <span class="sort-arrow"></span></button>
+    <button class="sort-btn"   id="sortBtn-price"  onclick="setStockSort('price')">Prix <span class="sort-arrow"></span></button>
+  </div>
+
+  <div id="stockCount" class="stock-count"></div>
+  <div id="stockList"  class="ilist"></div>
+  <div id="stockEmpty" class="empty" style="display:none;padding:40px 20px">
+    <div class="eico">🔍</div>
+    <div class="etit">Aucun résultat</div>
+    <div class="esub">Essayez un autre terme de recherche</div>
   </div>
 </div>
 
@@ -295,154 +294,53 @@
 <!-- ═══════════════════════ MODALS ═══════════════════════════ -->
 
 <!-- MODAL AJOUT ARTICLE BL -->
-<div class="mover" id="mBLAdd">
-  <div class="modal">
-    <div class="mhandle"></div>
-    <div class="mtit">➕ Article du BL</div>
-    <div class="fg">
-      <label class="flbl">Code-barres *</label>
-      <div class="manual-wrap">
-        <input class="finp" id="blCode" placeholder="Ex: 3017620422003" type="tel" autocomplete="off"/>
-        <button class="btn bp manualbtn" onclick="startBLAddCam()" title="Scanner">📷</button>
-      </div>
-    </div>
-    <div class="fg">
-      <label class="flbl">Nom du produit *</label>
-      <input class="finp" id="blName" placeholder="Ex: Radiateur Acova" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="flbl">Quantité attendue *</label>
-      <input class="finp" id="blQtyExp" type="number" min="1" value="1" placeholder="1"/>
-    </div>
-    <div class="fg">
-      <label class="flbl">Prix d'achat unitaire (€)</label>
-      <input class="finp" id="blPriceIn" type="number" step="0.01" min="0" placeholder="0.00"/>
-    </div>
-    <button class="btn bp" onclick="saveBLItem()">✅ Ajouter au BL</button>
-    <button class="btn bs" onclick="closeM('mBLAdd')">Annuler</button>
-  </div>
-</div>
-
-<!-- MINI CAM MODAL pour scan code BL -->
-<div class="mover" id="mBLScan">
-  <div class="modal">
-    <div class="mhandle"></div>
-    <div class="mtit">📷 Scanner le code-barres</div>
-    <div class="cam-wrap" style="margin-bottom:12px">
-      <video id="blAddVid" playsinline autoplay muted></video>
-      <div class="overlay" id="blAddOverlay" style="display:none">
-        <div class="frame"><div class="sline"></div>
-          <div class="c tl"></div><div class="c tr"></div>
-          <div class="c bl"></div><div class="c br"></div>
-        </div>
-      </div>
-      <div class="cam-off" id="blAddCamOff"><div class="icon">📷</div><p>Démarrage...</p></div>
-    </div>
-    <div class="status" id="blAddStatus">Pointez le code-barres</div>
-    <button class="btn bs" onclick="stopBLAddCam()">Annuler</button>
-  </div>
-</div>
-
-<!-- MODAL PHOTO BL (IA) -->
-<div class="mover" id="mBLPhoto">
-  <div class="modal bl-photo-modal">
-    <div class="mhandle"></div>
-    <div id="blPhotoCapture">
-      <div class="mtit">📸 Photographier le BL</div>
-      <p style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.5">
-        Photographiez chaque page du bon de livraison. L'IA extraira automatiquement tous les articles.
-      </p>
-      <div class="bl-photo-pages" id="blPhotoPages"></div>
-      <div id="blPhotoEmptyMsg" style="text-align:center;padding:20px 10px;color:var(--dim)">
-        <div style="font-size:36px;margin-bottom:8px">📄</div>
-        <div style="font-size:13px;font-weight:600;color:var(--txt)">Aucune page ajoutée</div>
-        <div style="font-size:11px;margin-top:4px">Prenez une photo ou importez depuis la galerie</div>
-      </div>
-      <input type="file" id="blPhotoCamInput"     accept="image/*" capture="environment" style="display:none" onchange="handleBLPhotoCam(this)">
-      <input type="file" id="blPhotoGalleryInput" accept="image/*" multiple           style="display:none" onchange="handleBLPhotoGallery(this)">
-      <div class="bl-photo-actions" style="margin-top:10px">
-        <button class="btn bp" onclick="document.getElementById('blPhotoCamInput').click()">📷 Photo</button>
-        <button class="btn bs" onclick="document.getElementById('blPhotoGalleryInput').click()">🖼 Galerie</button>
-      </div>
-      <button class="btn bg" id="btnAnalyzeBL" onclick="analyzeBLWithAI()" style="display:none;margin-top:10px">🤖 Analyser avec l'IA</button>
-      <button class="btn bs" onclick="closeM('mBLPhoto')" style="margin-top:8px">Annuler</button>
-    </div>
-    <div id="blPhotoLoading" style="display:none">
-      <div class="ai-loading">
-        <div class="ai-spinner"></div>
-        <div class="ai-loading-msg" id="blPhotoLoadingMsg">Analyse en cours…</div>
-        <div class="ai-loading-sub">L'IA lit votre bon de livraison</div>
-      </div>
-    </div>
-    <div id="blPhotoResult" style="display:none">
-      <div class="bl-photo-result-header">
-        <div class="mtit" style="margin:0">Articles détectés</div>
-        <span class="bl-photo-result-count" id="blPhotoResultCount">0 article</span>
-      </div>
-      <p style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.4">
-        Vérifiez les articles extraits avant de les ajouter au BL.
-      </p>
-      <div class="bl-photo-result-list ilist" id="blPhotoResultList"></div>
-      <button class="btn bg" onclick="confirmBLPhotoItems()" style="margin-top:12px">✅ Ajouter au BL</button>
-      <button class="btn bs" onclick="retakeBLPhoto()" style="margin-top:8px">↩ Reprendre les photos</button>
-      <button class="btn bs" onclick="closeM('mBLPhoto')" style="margin-top:8px">Annuler</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL NOUVEAU PRODUIT (inventaire physique — article inconnu) -->
-<div class="mover" id="mNewInv">
-  <div class="modal">
-    <div class="mhandle"></div>
-    <div class="mtit">✨ Nouveau produit inconnu</div>
-    <div class="msub" id="mNewInvCode">CODE: —</div>
-    <p style="font-size:12px;color:var(--dim);margin-bottom:14px;line-height:1.5">Ce code-barres n'existe pas encore dans votre stock. Créez la référence pour continuer.</p>
-    <div class="fg">
-      <label class="flbl">Nom *</label>
-      <input class="finp" id="fInvName" placeholder="Ex: Café 250g" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="flbl">Groupe / Catégorie</label>
-      <input class="finp" id="fInvGroup" placeholder="Ex: Alimentaire" autocomplete="off"/>
-    </div>
-    <div class="fg">
-      <label class="flbl">Prix unitaire (€)</label>
-      <input class="finp" id="fInvPrice" type="number" step="0.01" min="0" placeholder="0.00"/>
-    </div>
-    <button class="btn bp" onclick="saveNewInvProduct()">✅ Créer et continuer</button>
-    <button class="btn bs" onclick="closeM('mNewInv')">Ignorer</button>
-  </div>
-</div>
-
-<!-- MODAL SORTIE — article non trouvé -->
-<div class="mover" id="mSortieUnknown">
-  <div class="modal">
-    <div class="mhandle"></div>
-    <div class="mtit">❌ Article introuvable</div>
-    <div class="msub" id="mSortieUnknownCode"></div>
-    <p style="font-size:13px;color:var(--dim);margin-bottom:14px">Ce code-barres n'est pas dans votre stock.</p>
-    <button class="btn bs" onclick="closeM('mSortieUnknown')">Fermer</button>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<!-- SheetJS pour export Excel -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="app.js"></script>
-<!-- MODAL CLÉ API GEMINI -->
-<div class="modal" id="mAPIKey">
+<!-- MODAL EDIT ARTICLE (STOCK) -->
+<div class="mover" id="mStockEdit">
   <div class="mbox">
-    <div class="mtit">🔑 Clé API Gemini</div>
-    <p style="font-size:13px;color:var(--dim);margin:0 0 12px">Gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--acc)">aistudio.google.com</a> — 1 500 requêtes/jour offertes.</p>
-    <input class="finp" id="geminiKeyInput" type="password" placeholder="AIzaSy…" autocomplete="off" style="font-family:monospace;font-size:13px"/>
+    <div class="mtit">✏️ Modifier l'article</div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:14px" id="stockEditCodeDisplay"></div>
+    <input type="hidden" id="stockEditCode"/>
+    <label class="flbl">Nom *</label>
+    <input class="finp" id="stockEditName" autocomplete="off"/>
+    <label class="flbl">Catégorie</label>
+    <select class="finp" id="stockEditGroup"></select>
+    <input class="finp" id="stockEditGroupCustom" placeholder="Nom du nouveau groupe" style="display:none;margin-top:6px"/>
+    <label class="flbl">Prix unitaire HT (€)</label>
+    <input class="finp" id="stockEditPrice" type="number" step="0.01" min="0"/>
+    <label class="flbl">Quantité</label>
+    <input class="finp" id="stockEditQty" type="number" min="0" step="1"/>
+    <div class="mact" style="justify-content:space-between">
+      <button class="btn br2" onclick="deleteStockItem()">🗑 Supprimer</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn bs" onclick="closeM('mStockEdit')">Annuler</button>
+        <button class="btn bp" onclick="saveStockEdit()">💾 Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST DOUCHETTE -->
+<div id="douchetteToast" class="douchette-toast" style="display:none">
+  <span class="douchette-ico">🔫</span>
+  <span id="douchetteToastCode"></span>
+</div>
+
+<!-- MODAL NOUVEL ARTICLE BL -->
+<div class="mover" id="mBLNewItem">
+  <div class="mbox">
+    <div class="mtit">🆕 Nouvel article</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:12px">Code : <code id="blNewCode" style="font-family:var(--mono);color:var(--cyan)"></code></div>
+    <label class="flbl">Nom du produit *</label>
+    <input class="finp" id="blNewName" placeholder="Ex: Robinet thermostatique" autocomplete="off"/>
+    <label class="flbl">Prix unitaire HT (€)</label>
+    <input class="finp" id="blNewPrice" type="number" step="0.01" min="0" placeholder="0.00"/>
+    <label class="flbl">Catégorie</label>
+    <select class="finp" id="blNewGroup"></select>
+    <input class="finp" id="blNewGroupCustom" placeholder="Nom du nouveau groupe" style="display:none;margin-top:6px"/>
     <div class="mact">
-      <button class="btn bs" onclick="closeM('mAPIKey')">Annuler</button>
-      <button class="btn bp" onclick="saveAPIKeyFromModal()">💾 Enregistrer</button>
+      <button class="btn bs" onclick="closeM('mBLNewItem')">Annuler</button>
+      <button class="btn bp" onclick="saveBLNewItem()">✅ Ajouter</button>
     </div>
   </div>
 </div>
 </body>
-</html>

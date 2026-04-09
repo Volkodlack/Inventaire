@@ -40,6 +40,7 @@ function goTab(name, el) {
   el.classList.add('on');
   document.getElementById('page-' + name).classList.add('on');
   if (name === 'export') renderPreview();
+  if (name === 'stock')  renderStock();
   // Arrêter les caméras si on quitte
   if (name !== 'sortie'     && sortieScanning) stopSortieCam();
   if (name !== 'inventaire' && invScanning)    stopInvCam();
@@ -97,20 +98,30 @@ function openCamera(videoEl, onStream, onError) {
 // ══════════════════════════════════════════════════════════
 // ── MODULE BL ─────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-var blItems     = [];
-var blPhase     = 1;
-var blStream    = null;
-var blScanning  = false;
-var blCooldown  = false;
-var blAddStream = null;
-var blPhotos         = [];
-var blPhotoExtracted = [];
+var blItems      = []; // [{code, name, group, price, qty}]
+var blPhase      = 1;
+var blStream     = null;
+var blScanning   = false;
+var blCooldown   = false;
+var blPendingCode = null;
 
-// Phase 1
-function renderBLPhase1() {
-  var list = document.getElementById('blItemsList');
-  var msg  = document.getElementById('blEmptyMsg');
-  var btn  = document.getElementById('btnStartVerif');
+function setBLPhase(p) {
+  blPhase = p;
+  document.getElementById('blPhase1').style.display = p === 1 ? 'block' : 'none';
+  document.getElementById('blPhase2').style.display = p === 2 ? 'block' : 'none';
+  [1,2].forEach(function(i) {
+    var step = document.getElementById('blStep' + i);
+    step.classList.remove('on','done');
+    if (i < p) step.classList.add('done');
+    else if (i === p) step.classList.add('on');
+  });
+  document.getElementById('blLine1').classList.toggle('done', p >= 2);
+}
+
+function renderBLScanList() {
+  var list = document.getElementById('blScanList');
+  var msg  = document.getElementById('blScanEmptyMsg');
+  var btn  = document.getElementById('btnBLRecap');
   if (!blItems.length) {
     list.innerHTML = ''; msg.style.display = 'block'; btn.style.display = 'none'; return;
   }
@@ -121,132 +132,17 @@ function renderBLPhase1() {
       '<div class="iinf">' +
         '<div class="iname">' + esc(it.name) + '</div>' +
         '<div class="icode">' + esc(it.code) + '</div>' +
-        '<div class="igrp">Qté attendue : ' + it.qtyExpected + (it.price ? ' · ' + it.price.toFixed(2) + ' €' : '') + '</div>' +
+        '<div class="igrp">' + esc(it.group) + (it.price ? ' · ' + it.price.toFixed(2) + ' €/u' : '') + '</div>' +
       '</div>' +
-      '<div class="irt"><button class="qbtn" style="width:32px;height:32px;font-size:14px" onclick="removeBLItem(' + idx + ')">🗑</button></div>' +
+      '<div class="irt">' +
+        '<div class="iqty">' + it.qty + '</div>' +
+        '<button class="qbtn" style="width:28px;height:28px;font-size:12px;margin-top:4px" onclick="removeBLScanItem(' + idx + ')">🗑</button>' +
+      '</div>' +
     '</div>';
   }).join('');
 }
 
-function openBLAdd() {
-  document.getElementById('blCode').value    = '';
-  document.getElementById('blName').value    = '';
-  document.getElementById('blQtyExp').value  = '1';
-  document.getElementById('blPriceIn').value = '';
-  document.getElementById('mBLAdd').classList.add('show');
-  setTimeout(function() { document.getElementById('blCode').focus(); }, 350);
-}
-
-function saveBLItem() {
-  var code  = document.getElementById('blCode').value.trim();
-  var name  = document.getElementById('blName').value.trim();
-  var qty   = parseInt(document.getElementById('blQtyExp').value) || 1;
-  var price = parseFloat(document.getElementById('blPriceIn').value) || 0;
-  if (!code) { toast('⚠️ Code-barres obligatoire'); return; }
-  if (!name) { toast('⚠️ Nom du produit obligatoire'); return; }
-  var existing = blItems.findIndex(function(i) { return i.code === code; });
-  if (existing >= 0) { blItems[existing].qtyExpected += qty; toast('🔄 Quantité mise à jour'); }
-  else { blItems.push({ code: code, name: name, qtyExpected: qty, price: price, qtyScanned: 0 }); toast('✅ Article ajouté au BL'); }
-  closeM('mBLAdd');
-  renderBLPhase1();
-}
-
-function removeBLItem(idx) { blItems.splice(idx, 1); renderBLPhase1(); }
-
-// Mini cam pour saisie code BL
-function startBLAddCam() {
-  if (!navigator.mediaDevices) { toast('Caméra non disponible'); return; }
-  document.getElementById('mBLScan').classList.add('show');
-  document.getElementById('blAddCamOff').style.display = 'flex';
-  document.getElementById('blAddOverlay').style.display = 'none';
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
-    .then(function(s) {
-      blAddStream = s;
-      var vid = document.getElementById('blAddVid');
-      vid.srcObject = s; vid.play();
-      document.getElementById('blAddCamOff').style.display  = 'none';
-      document.getElementById('blAddOverlay').style.display = 'flex';
-      document.getElementById('blAddStatus').textContent    = 'Pointez le code-barres';
-      var bd = makeBarcodeDetector();
-      if (!bd) return;
-      var active = true;
-      function loop() {
-        if (!active || !blAddStream) return;
-        bd.detect(vid).then(function(codes) {
-          if (codes.length > 0) {
-            active = false;
-            var code = codes[0].rawValue;
-            if (navigator.vibrate) navigator.vibrate(70);
-            document.getElementById('blCode').value = code;
-            if (inv[code]) {
-              document.getElementById('blName').value    = inv[code].name;
-              document.getElementById('blPriceIn').value = inv[code].price || '';
-            }
-            stopBLAddCam();
-            toast('✅ Code scanné : ' + code);
-          } else { requestAnimationFrame(loop); }
-        }).catch(function() { requestAnimationFrame(loop); });
-      }
-      loop();
-    }).catch(function(e) { document.getElementById('blAddStatus').textContent = 'Erreur : ' + e.message; });
-}
-
-function stopBLAddCam() {
-  if (blAddStream) { blAddStream.getTracks().forEach(function(t) { t.stop(); }); blAddStream = null; }
-  document.getElementById('mBLScan').classList.remove('show');
-}
-
-// Phase 2 : Vérification
-function startBLVerif() {
-  if (!blItems.length) { toast('⚠️ Ajoutez des articles au BL d\'abord'); return; }
-  blItems.forEach(function(it) { it.qtyScanned = 0; });
-  setBLPhase(2);
-  renderBLVerifList();
-  updateBLProgress();
-}
-
-function setBLPhase(p) {
-  blPhase = p;
-  document.getElementById('blPhase1').style.display = p === 1 ? 'block' : 'none';
-  document.getElementById('blPhase2').style.display = p === 2 ? 'block' : 'none';
-  document.getElementById('blPhase3').style.display = p === 3 ? 'block' : 'none';
-  [1,2,3].forEach(function(i) {
-    var step = document.getElementById('blStep' + i);
-    step.classList.remove('on','done');
-    if (i < p) step.classList.add('done');
-    else if (i === p) step.classList.add('on');
-  });
-  document.getElementById('blLine1').classList.toggle('done', p >= 2);
-  document.getElementById('blLine2').classList.toggle('done', p >= 3);
-}
-
-function renderBLVerifList() {
-  var list = document.getElementById('blVerifList');
-  list.innerHTML = blItems.map(function(it) {
-    var ok   = it.qtyScanned >= it.qtyExpected;
-    var over = it.qtyScanned > it.qtyExpected;
-    var pct  = Math.min(100, Math.round((it.qtyScanned / it.qtyExpected) * 100));
-    var cls  = over ? 'bl-verifcard over' : (ok ? 'bl-verifcard ok' : 'bl-verifcard');
-    var icon = over ? '⚠️' : (ok ? '✅' : '⏳');
-    return '<div class="' + cls + '">' +
-      '<div class="bl-verifcard-top">' +
-        '<span class="bl-vicon">' + icon + '</span>' +
-        '<span class="bl-vname">' + esc(it.name) + '</span>' +
-        '<span class="bl-vcount">' + it.qtyScanned + '/' + it.qtyExpected + '</span>' +
-      '</div>' +
-      '<div class="bl-vbar"><div class="bl-vbar-fill" style="width:' + pct + '%;background:' + (over ? 'var(--red)' : ok ? 'var(--green)' : 'var(--cyan)') + '"></div></div>' +
-      '<div class="icode">' + esc(it.code) + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function updateBLProgress() {
-  var total   = blItems.reduce(function(s, i) { return s + i.qtyExpected; }, 0);
-  var scanned = blItems.reduce(function(s, i) { return s + Math.min(i.qtyScanned, i.qtyExpected); }, 0);
-  var pct     = total > 0 ? Math.round((scanned / total) * 100) : 0;
-  document.getElementById('blProgressFill').style.width = pct + '%';
-  document.getElementById('blProgressTxt').textContent  = scanned + ' / ' + total + ' articles vérifiés (' + pct + '%)';
-}
+function removeBLScanItem(idx) { blItems.splice(idx, 1); renderBLScanList(); }
 
 function startBLCam() {
   document.getElementById('blStatus').textContent = 'Demande accès caméra…';
@@ -293,36 +189,68 @@ function handleBLScan(code) {
   if (blCooldown) return;
   blCooldown = true;
   if (navigator.vibrate) navigator.vibrate(70);
-  var item = blItems.find(function(i) { return i.code === code; });
-  var badge, badgeCls, statusMsg;
-  if (item) {
-    item.qtyScanned++;
-    if (item.qtyScanned > item.qtyExpected) {
-      badge = '⚠️ EXCÉDENT'; badgeCls = 'ls-badge';
-      statusMsg = '⚠️ Quantité supérieure au BL';
-      toast('⚠️ ' + item.name + ' : ' + item.qtyScanned + '/' + item.qtyExpected + ' (excédent !)');
-      document.getElementById('blStatus').className = 'status err';
-    } else {
-      badge = '✅ OK'; badgeCls = 'ls-badge fb';
-      statusMsg = '✅ ' + item.name + ' — ' + item.qtyScanned + '/' + item.qtyExpected;
-      toast('✅ ' + item.name + ' — ' + item.qtyScanned + '/' + item.qtyExpected);
-      document.getElementById('blStatus').className = 'status ok';
-    }
-    document.getElementById('blStatus').textContent = statusMsg;
-  } else {
-    badge = '❌ NON BL'; badgeCls = 'ls-badge nb';
-    toast('❌ Code ' + code + ' non présent dans le BL');
-    document.getElementById('blStatus').textContent = '❌ Article non prévu dans le BL';
-    document.getElementById('blStatus').className   = 'status err';
+  // Déjà dans le BL en cours → incrémenter
+  var existing = blItems.findIndex(function(i) { return i.code === code; });
+  if (existing >= 0) {
+    blItems[existing].qty++;
+    toast('✅ ' + blItems[existing].name + ' — qté : ' + blItems[existing].qty);
+    document.getElementById('blStatus').textContent = '✅ ' + blItems[existing].name + ' (×' + blItems[existing].qty + ')';
+    document.getElementById('blStatus').className = 'status ok';
+    renderBLScanList();
+    setTimeout(function() { blCooldown = false; }, 1200);
+    return;
   }
-  document.getElementById('blLscode').textContent  = code;
-  document.getElementById('blLsname').textContent  = item ? item.name : 'Inconnu';
-  document.getElementById('blLsbadge').textContent = badge;
-  document.getElementById('blLsbadge').className   = badgeCls;
-  document.getElementById('blLscan').classList.add('show');
-  renderBLVerifList();
-  updateBLProgress();
-  setTimeout(function() { blCooldown = false; document.getElementById('blStatus').className = 'status ok'; }, 1200);
+  // Connu dans l'inventaire → ajouter directement
+  if (inv[code]) {
+    var it = inv[code];
+    blItems.push({ code: code, name: it.name, group: it.group || 'Sans groupe', price: it.price || 0, qty: 1 });
+    toast('✅ ' + it.name + ' ajouté');
+    document.getElementById('blStatus').textContent = '✅ ' + it.name;
+    document.getElementById('blStatus').className = 'status ok';
+    renderBLScanList();
+    setTimeout(function() { blCooldown = false; }, 1200);
+    return;
+  }
+  // Article inconnu → modal saisie
+  blPendingCode = code;
+  document.getElementById('blNewCode').textContent = code;
+  document.getElementById('blNewName').value  = '';
+  document.getElementById('blNewPrice').value = '';
+  _fillBLGroupSelect();
+  document.getElementById('mBLNewItem').classList.add('show');
+  document.getElementById('blStatus').textContent = '🆕 Nouvel article — saisissez les infos';
+  document.getElementById('blStatus').className = 'status';
+  setTimeout(function() { document.getElementById('blNewName').focus(); }, 350);
+  setTimeout(function() { blCooldown = false; }, 1200);
+}
+
+function _fillBLGroupSelect() {
+  var groups = ['Sans groupe'];
+  Object.values(inv).forEach(function(it) {
+    if (it.group && groups.indexOf(it.group) < 0) groups.push(it.group);
+  });
+  var sel = document.getElementById('blNewGroup');
+  sel.innerHTML = groups.map(function(g) {
+    return '<option value="' + esc(g) + '">' + esc(g) + '</option>';
+  }).join('') + '<option value="__new__">+ Nouveau groupe…</option>';
+  document.getElementById('blNewGroupCustom').style.display = 'none';
+  sel.onchange = function() {
+    document.getElementById('blNewGroupCustom').style.display = sel.value === '__new__' ? 'block' : 'none';
+  };
+}
+
+function saveBLNewItem() {
+  var name  = document.getElementById('blNewName').value.trim();
+  var price = parseFloat(document.getElementById('blNewPrice').value) || 0;
+  var sel   = document.getElementById('blNewGroup');
+  var group = sel.value === '__new__'
+    ? (document.getElementById('blNewGroupCustom').value.trim() || 'Sans groupe')
+    : sel.value;
+  if (!name) { toast('⚠️ Nom obligatoire'); return; }
+  blItems.push({ code: blPendingCode, name: name, group: group, price: price, qty: 1 });
+  closeM('mBLNewItem');
+  renderBLScanList();
+  toast('✅ ' + name + ' ajouté au BL');
 }
 
 function blManualScan() {
@@ -332,30 +260,42 @@ function blManualScan() {
   handleBLScan(v);
 }
 
-// Phase 3
-function goToPhase3() { stopBLCam(); setBLPhase(3); renderBLSummary(); }
-function goToPhase2() { setBLPhase(2); renderBLVerifList(); updateBLProgress(); }
+function goToBLRecap() {
+  if (!blItems.length) { toast('⚠️ Aucun article scanné'); return; }
+  stopBLCam();
+  setBLPhase(2);
+  renderBLRecap();
+}
 
-function renderBLSummary() {
-  var list = document.getElementById('blSummaryList');
-  var totalHT = 0;
+function goBackToScan() {
+  setBLPhase(1);
+  renderBLScanList();
+}
+
+function renderBLRecap() {
+  var list     = document.getElementById('blRecapList');
+  var totalHT  = 0;
+  var totalQty = 0;
   list.innerHTML = blItems.map(function(it) {
-    var qty   = it.qtyScanned > 0 ? it.qtyScanned : it.qtyExpected;
-    var total = (it.price || 0) * qty;
-    totalHT  += total;
-    var status = it.qtyScanned === it.qtyExpected ? '✅' : it.qtyScanned > it.qtyExpected ? '⚠️' : it.qtyScanned === 0 ? '❌' : '⚠️';
+    var lineTotal = (it.price || 0) * it.qty;
+    totalHT  += lineTotal;
+    totalQty += it.qty;
     return '<div class="icard">' +
-      '<div class="iico">' + status + '</div>' +
+      '<div class="iico">📦</div>' +
       '<div class="iinf">' +
         '<div class="iname">' + esc(it.name) + '</div>' +
         '<div class="icode">' + esc(it.code) + '</div>' +
-        '<div class="igrp">Scanné : ' + it.qtyScanned + ' / Attendu : ' + it.qtyExpected + '</div>' +
+        '<div class="igrp">' + esc(it.group) + (it.price ? ' · ' + it.price.toFixed(2) + ' €/u' : '') + '</div>' +
       '</div>' +
-      '<div class="irt"><div class="iqty">' + qty + '</div><div class="iprc">' + (it.price ? it.price.toFixed(2) + ' €' : '—') + '</div></div>' +
+      '<div class="irt"><div class="iqty">' + it.qty + '</div>' +
+        (lineTotal ? '<div class="iprc">' + lineTotal.toFixed(2) + ' €</div>' : '') +
+      '</div>' +
     '</div>';
   }).join('');
-  document.getElementById('blTotalWrap').innerHTML =
-    '<div class="bl-total"><span>Total livraison (prix d\'achat)</span><span class="bl-total-val">' + totalHT.toFixed(2) + ' €</span></div>';
+  document.getElementById('blRecapStats').innerHTML =
+    '<div class="bl-stat"><span>Articles différents</span><strong>' + blItems.length + '</strong></div>' +
+    '<div class="bl-stat"><span>Unités au total</span><strong>' + totalQty + '</strong></div>' +
+    (totalHT ? '<div class="bl-stat"><span>Montant total HT</span><strong>' + totalHT.toFixed(2) + ' €</strong></div>' : '');
 }
 
 function addBLToInventory() {
@@ -363,17 +303,16 @@ function addBLToInventory() {
   var batch = db.batch();
   var now   = Date.now();
   blItems.forEach(function(it) {
-    var qty = it.qtyScanned > 0 ? it.qtyScanned : it.qtyExpected;
     var ref = col.doc(it.code);
     if (inv[it.code]) {
-      batch.update(ref, { qty: firebase.firestore.FieldValue.increment(qty), updatedAt: now });
+      batch.update(ref, { qty: firebase.firestore.FieldValue.increment(it.qty), updatedAt: now });
     } else {
-      batch.set(ref, { code: it.code, name: it.name, group: 'Sans groupe', price: it.price || 0, qty: qty, createdAt: now, updatedAt: now });
+      batch.set(ref, { code: it.code, name: it.name, group: it.group || 'Sans groupe', price: it.price || 0, qty: it.qty, createdAt: now, updatedAt: now });
     }
   });
   batch.commit()
     .then(function() {
-      toast('✅ ' + blItems.length + ' article(s) ajouté(s) à l\'inventaire !');
+      toast('✅ ' + blItems.length + ' article(s) intégré(s) au stock !');
       cancelBL();
     })
     .catch(function(e) { toast('⚠️ Erreur : ' + e.message); });
@@ -381,164 +320,10 @@ function addBLToInventory() {
 
 function cancelBL() {
   stopBLCam();
-  blItems = []; blPhase = 1;
+  blItems = []; blPhase = 1; blPendingCode = null;
   setBLPhase(1);
-  renderBLPhase1();
+  renderBLScanList();
   toast('🗑 BL annulé');
-}
-
-// ── MODULE PHOTO BL (IA) ──────────────────────────────────
-function openBLPhoto() {
-  blPhotos = []; blPhotoExtracted = [];
-  _showBLPhotoState('capture');
-  renderBLPhotoPages();
-  document.getElementById('mBLPhoto').classList.add('show');
-}
-
-function _showBLPhotoState(state) {
-  document.getElementById('blPhotoCapture').style.display = state === 'capture' ? 'block' : 'none';
-  document.getElementById('blPhotoLoading').style.display = state === 'loading' ? 'block' : 'none';
-  document.getElementById('blPhotoResult').style.display  = state === 'result'  ? 'block' : 'none';
-}
-
-function renderBLPhotoPages() {
-  var pagesEl    = document.getElementById('blPhotoPages');
-  var emptyEl    = document.getElementById('blPhotoEmptyMsg');
-  var analyzeBtn = document.getElementById('btnAnalyzeBL');
-  if (!blPhotos.length) { pagesEl.innerHTML = ''; emptyEl.style.display = 'block'; analyzeBtn.style.display = 'none'; return; }
-  emptyEl.style.display = 'none'; analyzeBtn.style.display = 'block';
-  pagesEl.innerHTML = blPhotos.map(function(p, i) {
-    return '<div class="bl-photo-thumb">' +
-      '<img src="data:' + p.mimeType + ';base64,' + p.data + '" alt="Page ' + (i + 1) + '">' +
-      '<div class="bl-photo-thumb-lbl">Page ' + (i + 1) + '</div>' +
-      '<button class="bl-photo-thumb-del" onclick="removeBLPhoto(' + i + ')">✕</button>' +
-    '</div>';
-  }).join('');
-}
-
-function removeBLPhoto(idx) { blPhotos.splice(idx, 1); renderBLPhotoPages(); }
-
-function handleBLPhotoCam(input) { _readBLPhotoFiles(input); }
-function handleBLPhotoGallery(input) { _readBLPhotoFiles(input); }
-
-function _readBLPhotoFiles(input) {
-  if (!input.files || !input.files.length) return;
-  var files = Array.from(input.files);
-  var remaining = files.length;
-  files.forEach(function(file) {
-    var img = new Image();
-    var url = URL.createObjectURL(file);
-    img.onload = function() {
-      URL.revokeObjectURL(url);
-      var canvas = document.createElement('canvas');
-      var maxDim = 1600;
-      var w = img.width, h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-        else       { w = Math.round(w * maxDim / h); h = maxDim; }
-      }
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      blPhotos.push({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
-      remaining--;
-      if (remaining === 0) { input.value = ''; renderBLPhotoPages(); }
-    };
-    img.src = url;
-  });
-}
-
-// ── CLÉ API GEMINI ────────────────────────────────────────
-function getGeminiKey() { return localStorage.getItem('gemini_api_key') || ''; }
-function saveGeminiKey(k) { localStorage.setItem('gemini_api_key', k.trim()); }
-function openAPIKeyModal() {
-  var current = getGeminiKey();
-  document.getElementById('geminiKeyInput').value = current;
-  document.getElementById('mAPIKey').classList.add('show');
-}
-function saveAPIKeyFromModal() {
-  var val = document.getElementById('geminiKeyInput').value.trim();
-  if (!val) { toast('⚠️ Clé vide, saisie annulée'); return; }
-  if (!val.startsWith('AIza')) { toast('⚠️ Format invalide (doit commencer par AIza)'); return; }
-  saveGeminiKey(val);
-  closeM('mAPIKey');
-  toast('✅ Clé API Gemini enregistrée');
-}
-
-async function analyzeBLWithAI() {
-  var apiKey = getGeminiKey();
-  if (!apiKey) {
-    toast('⚠️ Clé API Gemini non configurée');
-    openAPIKeyModal();
-    return;
-  }
-  if (!blPhotos.length) { toast('⚠️ Ajoutez au moins une photo'); return; }
-  _showBLPhotoState('loading');
-  document.getElementById('blPhotoLoadingMsg').textContent = 'Analyse de ' + blPhotos.length + ' page' + (blPhotos.length > 1 ? 's' : '') + ' en cours…';
-  var parts = [];
-  blPhotos.forEach(function(photo) {
-    parts.push({ inline_data: { mime_type: photo.mimeType, data: photo.data } });
-  });
-  parts.push({
-    text: 'Voici un bon de livraison en ' + blPhotos.length + ' page(s). Extrais TOUS les articles.\nPour chaque article :\n- code : code-barres EAN ou référence (si absent, génère REF001, REF002…)\n- name : nom complet du produit\n- qty  : quantité (entier, 1 si non précisé)\n- price: prix unitaire HT en euros (0 si absent)\nRéponds UNIQUEMENT avec du JSON valide, sans markdown :\n{"articles":[{"code":"","name":"","qty":1,"price":0.00}]}'
-  });
-  try {
-    var response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: parts }] })
-      }
-    );
-    var data = await response.json();
-    if (!response.ok) throw new Error(data.error ? data.error.message : 'Erreur API (' + response.status + ')');
-    var text  = ((((data.candidates || [])[0] || {}).content || {}).parts || []).map(function(p) { return p.text || ''; }).join('');
-    var clean = text.replace(/```json|```/gi, '').trim();
-    var match = clean.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Format de réponse invalide');
-    var parsed   = JSON.parse(match[0]);
-    var articles = (parsed.articles || []).filter(function(a) { return a.name && String(a.name).trim(); });
-    if (!articles.length) throw new Error('Aucun article trouvé dans le document');
-    blPhotoExtracted = articles;
-    _showBLPhotoResult(articles);
-  } catch(e) { _showBLPhotoState('capture'); toast('⚠️ ' + e.message); }
-}
-
-function _showBLPhotoResult(articles) {
-  _showBLPhotoState('result');
-  var n = articles.length;
-  document.getElementById('blPhotoResultCount').textContent = n + ' article' + (n > 1 ? 's' : '');
-  document.getElementById('blPhotoResultList').innerHTML = articles.map(function(it, i) {
-    var price = parseFloat(it.price) || 0;
-    var qty   = parseInt(it.qty)    || 1;
-    return '<div class="icard"><div class="iico">📦</div>' +
-      '<div class="iinf"><div class="iname">' + esc(it.name || ('Article ' + (i + 1))) + '</div>' +
-      '<div class="icode">' + esc(it.code || '—') + '</div>' +
-      '<div class="igrp">Qté : ' + qty + (price ? ' · ' + price.toFixed(2) + ' €/u' : '') + '</div></div>' +
-      '<div class="irt"><div class="iqty">' + qty + '</div></div></div>';
-  }).join('');
-}
-
-function retakeBLPhoto() { _showBLPhotoState('capture'); renderBLPhotoPages(); }
-
-function confirmBLPhotoItems() {
-  var added = 0;
-  blPhotoExtracted.forEach(function(it) {
-    var code  = String(it.code  || '').trim();
-    var name  = String(it.name  || '').trim();
-    var qty   = parseInt(it.qty)   || 1;
-    var price = parseFloat(it.price) || 0;
-    if (!name) return;
-    if (!code) code = 'REF-' + Date.now() + '-' + added;
-    var existing = blItems.findIndex(function(i) { return i.code === code; });
-    if (existing >= 0) { blItems[existing].qtyExpected += qty; }
-    else { blItems.push({ code: code, name: name, qtyExpected: qty, price: price, qtyScanned: 0 }); }
-    added++;
-  });
-  closeM('mBLPhoto');
-  renderBLPhase1();
-  toast('✅ ' + added + ' article' + (added > 1 ? 's' : '') + ' importé' + (added > 1 ? 's' : '') + ' depuis le BL');
 }
 
 // Keyboard shortcuts BL
@@ -962,6 +747,191 @@ function resetInventaire() {
 
 document.getElementById('invManInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') invManualScan(); });
 
+
+// ══════════════════════════════════════════════════════════
+// ── MODULE STOCK (recherche / tri) ────────────────────────
+// ══════════════════════════════════════════════════════════
+var stockSortBy  = 'name';
+var stockSortDir = 1; // 1 = asc, -1 = desc
+
+function renderStock() {
+  var query = (document.getElementById('stockSearch').value || '').toLowerCase().trim();
+  var items = Object.values(inv);
+
+  // Bouton clear
+  document.getElementById('stockSearchClear').style.display = query ? 'block' : 'none';
+
+  // Filtrage
+  if (query) {
+    items = items.filter(function(it) {
+      return (it.name  || '').toLowerCase().indexOf(query) >= 0 ||
+             (it.code  || '').toLowerCase().indexOf(query) >= 0 ||
+             (it.group || '').toLowerCase().indexOf(query) >= 0;
+    });
+  }
+
+  // Tri
+  items.sort(function(a, b) {
+    var va = a[stockSortBy], vb = b[stockSortBy];
+    if (typeof va === 'string') return stockSortDir * va.localeCompare(vb || '');
+    return stockSortDir * ((va || 0) - (vb || 0));
+  });
+
+  var list  = document.getElementById('stockList');
+  var empty = document.getElementById('stockEmpty');
+  var count = document.getElementById('stockCount');
+
+  if (!items.length) {
+    list.innerHTML = ''; empty.style.display = 'block';
+    count.textContent = ''; return;
+  }
+  empty.style.display = 'none';
+  count.textContent   = items.length + ' article' + (items.length > 1 ? 's' : '') +
+    (query ? ' · résultat' + (items.length > 1 ? 's' : '') + ' pour "' + query + '"' : '');
+
+  list.innerHTML = items.map(function(it) {
+    var total = (it.price || 0) * (it.qty || 0);
+    var qtyClass = it.qty === 0 ? 'iqty red' : (it.qty <= 2 ? 'iqty warn' : 'iqty');
+    return '<div class="icard" onclick="openStockEdit(\'' + esc(it.code) + '\')" style="cursor:pointer">' +
+      '<div class="iico">📦</div>' +
+      '<div class="iinf">' +
+        '<div class="iname">' + esc(it.name) + '</div>' +
+        '<div class="icode">' + esc(it.code) + '</div>' +
+        '<div class="igrp">' + esc(it.group || 'Sans groupe') + (it.price ? ' · ' + it.price.toFixed(2) + ' €/u' : '') + (total ? ' · Total : ' + total.toFixed(2) + ' €' : '') + '</div>' +
+      '</div>' +
+      '<div class="irt"><div class="' + qtyClass + '">' + (it.qty || 0) + '</div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function setStockSort(field) {
+  if (stockSortBy === field) { stockSortDir *= -1; }
+  else { stockSortBy = field; stockSortDir = 1; }
+  document.querySelectorAll('.sort-btn').forEach(function(b) { b.classList.remove('on'); b.querySelector('.sort-arrow') && (b.querySelector('.sort-arrow').textContent = ''); });
+  var btn = document.getElementById('sortBtn-' + field);
+  if (btn) {
+    btn.classList.add('on');
+    var arrow = btn.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = stockSortDir === 1 ? '▲' : '▼';
+  }
+  renderStock();
+}
+
+function clearStockSearch() {
+  document.getElementById('stockSearch').value = '';
+  document.getElementById('stockSearchClear').style.display = 'none';
+  renderStock();
+}
+
+function openStockEdit(code) {
+  var it = inv[code];
+  if (!it) return;
+  document.getElementById('stockEditCode').value          = code;
+  document.getElementById('stockEditCodeDisplay').textContent = code;
+  document.getElementById('stockEditName').value          = it.name  || '';
+  document.getElementById('stockEditPrice').value         = it.price || '';
+  document.getElementById('stockEditQty').value           = it.qty   || 0;
+  _fillStockGroupSelect(it.group || 'Sans groupe');
+  document.getElementById('mStockEdit').classList.add('show');
+}
+
+function _fillStockGroupSelect(currentGroup) {
+  var groups = ['Sans groupe'];
+  Object.values(inv).forEach(function(it) {
+    if (it.group && groups.indexOf(it.group) < 0) groups.push(it.group);
+  });
+  if (currentGroup && groups.indexOf(currentGroup) < 0) groups.push(currentGroup);
+  var sel = document.getElementById('stockEditGroup');
+  sel.innerHTML = groups.map(function(g) {
+    return '<option value="' + esc(g) + '"' + (g === currentGroup ? ' selected' : '') + '>' + esc(g) + '</option>';
+  }).join('') + '<option value="__new__">+ Nouveau groupe…</option>';
+  document.getElementById('stockEditGroupCustom').style.display = 'none';
+  sel.onchange = function() {
+    document.getElementById('stockEditGroupCustom').style.display = sel.value === '__new__' ? 'block' : 'none';
+  };
+}
+
+function saveStockEdit() {
+  var code  = document.getElementById('stockEditCode').value;
+  var name  = document.getElementById('stockEditName').value.trim();
+  var price = parseFloat(document.getElementById('stockEditPrice').value) || 0;
+  var qty   = parseInt(document.getElementById('stockEditQty').value)   || 0;
+  var sel   = document.getElementById('stockEditGroup');
+  var group = sel.value === '__new__'
+    ? (document.getElementById('stockEditGroupCustom').value.trim() || 'Sans groupe')
+    : sel.value;
+  if (!name) { toast('⚠️ Nom obligatoire'); return; }
+  col.doc(code).update({ name: name, group: group, price: price, qty: qty, updatedAt: Date.now() })
+    .then(function() { closeM('mStockEdit'); renderStock(); toast('✅ Article mis à jour'); })
+    .catch(function(e) { toast('⚠️ Erreur : ' + e.message); });
+}
+
+function deleteStockItem() {
+  var code = document.getElementById('stockEditCode').value;
+  var name = (inv[code] || {}).name || code;
+  if (!confirm('Supprimer "' + name + '" du stock ?')) return;
+  col.doc(code).delete()
+    .then(function() { closeM('mStockEdit'); renderStock(); toast('🗑 Article supprimé'); })
+    .catch(function(e) { toast('⚠️ Erreur : ' + e.message); });
+}
+
+// ── Recherche depuis douchette sur l'onglet stock
+function handleStockDouchette(code) {
+  document.getElementById('stockSearch').value = code;
+  renderStock();
+}
+
+// ══════════════════════════════════════════════════════════
+// ── DOUCHETTE USB / BLUETOOTH ─────────────────────────────
+// ══════════════════════════════════════════════════════════
+// Une douchette se comporte comme un clavier rapide :
+// elle envoie les caractères du code très vite puis appuie
+// sur Entrée. On détecte ça en chronométrant les frappes.
+var _dbuf   = '';
+var _dtimer = null;
+
+document.addEventListener('keydown', function(e) {
+  var tag = (document.activeElement || {}).tagName || '';
+  var isInInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+  if (e.key === 'Enter' && _dbuf.length >= 3) {
+    var code = _dbuf;
+    _dbuf = ''; clearTimeout(_dtimer);
+    _dispatchDouchette(code);
+    return;
+  }
+
+  // Ignorer si on est dans un champ de texte (sauf pour la douchette détectée)
+  if (isInInput && e.key !== 'Enter') {
+    // Reset buffer si l'utilisateur tape manuellement (délai > 80ms)
+    return;
+  }
+
+  if (e.key.length === 1) {
+    _dbuf += e.key;
+    clearTimeout(_dtimer);
+    // Si pas de nouvel input dans 80ms → pas une douchette, vider
+    _dtimer = setTimeout(function() { _dbuf = ''; }, 80);
+  }
+});
+
+function _dispatchDouchette(code) {
+  if (!code) return;
+  // Afficher le toast douchette
+  var toast_el = document.getElementById('douchetteToast');
+  document.getElementById('douchetteToastCode').textContent = code;
+  toast_el.style.display = 'flex';
+  clearTimeout(_dispatchDouchette._hideTimer);
+  _dispatchDouchette._hideTimer = setTimeout(function() { toast_el.style.display = 'none'; }, 1800);
+
+  // Router vers la bonne fonction selon l'onglet actif
+  var activePage = (document.querySelector('.page.on') || {}).id || '';
+  if      (activePage === 'page-bl'          && blPhase === 1)   handleBLScan(code);
+  else if (activePage === 'page-sortie')                          handleSortie(code);
+  else if (activePage === 'page-inventaire'  && invScanning)      handleInvScan(code);
+  else if (activePage === 'page-stock')                           handleStockDouchette(code);
+  else toast('🔫 Code scanné : ' + code);
+}
 
 // ══════════════════════════════════════════════════════════
 // ── MODULE EXPORT ─────────────────────────────────────────
