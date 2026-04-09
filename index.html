@@ -54,7 +54,10 @@
         <span>L'IA extrait automatiquement tous les articles (multi-pages)</span>
       </div>
     </div>
-    <button class="btn bp" style="margin-bottom:8px" onclick="openBLPhoto()">📸 Scanner le BL en photo (IA)</button>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn bp" style="flex:1" onclick="openBLPhoto()">📸 Scanner le BL en photo (IA)</button>
+      <button class="btn bs" style="width:44px;font-size:18px;padding:0" onclick="openAPIKeyModal()" title="Configurer la clé API Anthropic">⚙️</button>
+    </div>
     <div class="sec-title" style="margin-bottom:8px">📋 Articles du bon de livraison</div>
     <div id="blItemsList" class="ilist"></div>
     <div id="blEmptyMsg" class="empty" style="padding:24px 20px">
@@ -429,5 +432,17 @@
 <!-- SheetJS pour export Excel -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js"></script>
+<!-- MODAL CLÉ API GEMINI -->
+<div class="modal" id="mAPIKey">
+  <div class="mbox">
+    <div class="mtit">🔑 Clé API Gemini</div>
+    <p style="font-size:13px;color:var(--dim);margin:0 0 12px">Gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--acc)">aistudio.google.com</a> — 1 500 requêtes/jour offertes.</p>
+    <input class="finp" id="geminiKeyInput" type="password" placeholder="AIzaSy…" autocomplete="off" style="font-family:monospace;font-size:13px"/>
+    <div class="mact">
+      <button class="btn bs" onclick="closeM('mAPIKey')">Annuler</button>
+      <button class="btn bp" onclick="saveAPIKeyFromModal()">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

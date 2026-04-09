@@ -448,27 +448,52 @@ function _readBLPhotoFiles(input) {
   });
 }
 
+// ── CLÉ API GEMINI ────────────────────────────────────────
+function getGeminiKey() { return localStorage.getItem('gemini_api_key') || ''; }
+function saveGeminiKey(k) { localStorage.setItem('gemini_api_key', k.trim()); }
+function openAPIKeyModal() {
+  var current = getGeminiKey();
+  document.getElementById('geminiKeyInput').value = current;
+  document.getElementById('mAPIKey').classList.add('show');
+}
+function saveAPIKeyFromModal() {
+  var val = document.getElementById('geminiKeyInput').value.trim();
+  if (!val) { toast('⚠️ Clé vide, saisie annulée'); return; }
+  if (!val.startsWith('AIza')) { toast('⚠️ Format invalide (doit commencer par AIza)'); return; }
+  saveGeminiKey(val);
+  closeM('mAPIKey');
+  toast('✅ Clé API Gemini enregistrée');
+}
+
 async function analyzeBLWithAI() {
+  var apiKey = getGeminiKey();
+  if (!apiKey) {
+    toast('⚠️ Clé API Gemini non configurée');
+    openAPIKeyModal();
+    return;
+  }
   if (!blPhotos.length) { toast('⚠️ Ajoutez au moins une photo'); return; }
   _showBLPhotoState('loading');
   document.getElementById('blPhotoLoadingMsg').textContent = 'Analyse de ' + blPhotos.length + ' page' + (blPhotos.length > 1 ? 's' : '') + ' en cours…';
-  var content = [];
+  var parts = [];
   blPhotos.forEach(function(photo) {
-    content.push({ type: 'image', source: { type: 'base64', media_type: photo.mimeType, data: photo.data } });
+    parts.push({ inline_data: { mime_type: photo.mimeType, data: photo.data } });
   });
-  content.push({
-    type: 'text',
+  parts.push({
     text: 'Voici un bon de livraison en ' + blPhotos.length + ' page(s). Extrais TOUS les articles.\nPour chaque article :\n- code : code-barres EAN ou référence (si absent, génère REF001, REF002…)\n- name : nom complet du produit\n- qty  : quantité (entier, 1 si non précisé)\n- price: prix unitaire HT en euros (0 si absent)\nRéponds UNIQUEMENT avec du JSON valide, sans markdown :\n{"articles":[{"code":"","name":"","qty":1,"price":0.00}]}'
   });
   try {
-    var response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 2000, messages: [{ role: 'user', content: content }] })
-    });
+    var response = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: parts }] })
+      }
+    );
     var data = await response.json();
     if (!response.ok) throw new Error(data.error ? data.error.message : 'Erreur API (' + response.status + ')');
-    var text  = (data.content || []).filter(function(b) { return b.type === 'text'; }).map(function(b) { return b.text; }).join('');
+    var text  = ((((data.candidates || [])[0] || {}).content || {}).parts || []).map(function(p) { return p.text || ''; }).join('');
     var clean = text.replace(/```json|```/gi, '').trim();
     var match = clean.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Format de réponse invalide');
