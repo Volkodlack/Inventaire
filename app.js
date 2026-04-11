@@ -10,6 +10,7 @@ firebase.initializeApp({
 
 var db  = firebase.firestore();
 var col = db.collection('inventaire');
+var blCol = db.collection('bons_livraison');
 
 // ── STATE GLOBAL ──────────────────────────────────────────
 var inv = {};
@@ -41,7 +42,7 @@ function goTab(name, el) {
   document.getElementById('page-' + name).classList.add('on');
   if (name === 'export') renderPreview();
   if (name === 'stock')  renderStock();
-  // Arrêter les caméras si on quitte
+  if (name === 'historique-bl') loadBLHistory();
   if (name !== 'sortie'     && sortieScanning) stopSortieCam();
   if (name !== 'inventaire' && invScanning)    stopInvCam();
   if (name !== 'bl'         && blScanning)     stopBLCam();
@@ -98,12 +99,119 @@ function openCamera(videoEl, onStream, onError) {
 // ══════════════════════════════════════════════════════════
 // ── MODULE BL ─────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-var blItems      = []; // [{code, name, group, price, qty}]
-var blPhase      = 1;
-var blStream     = null;
-var blScanning   = false;
-var blCooldown   = false;
+var blItems       = [];
+var blPhase       = 1;
+var blStream      = null;
+var blScanning    = false;
+var blCooldown    = false;
 var blPendingCode = null;
+var blModalOpen   = false; // Scanner pausé quand modal ouvert
+var blInfo        = { fournisseur: '', numero: '', date: '' };
+var blDraftId     = null;
+
+// ── DRAFT AUTO-SAVE ───────────────────────────────────────
+function saveBLDraft() {
+  if (!blItems.length && !blInfo.fournisseur && !blInfo.numero) return;
+  var draft = {
+    id: blDraftId || ('draft_' + Date.now()),
+    fournisseur: blInfo.fournisseur,
+    numero: blInfo.numero,
+    date: blInfo.date || new Date().toISOString().slice(0,10),
+    items: blItems,
+    savedAt: Date.now()
+  };
+  blDraftId = draft.id;
+  localStorage.setItem('bl_draft', JSON.stringify(draft));
+}
+
+function loadBLDraftFromStorage() {
+  try {
+    var raw = localStorage.getItem('bl_draft');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+function clearBLDraft() {
+  localStorage.removeItem('bl_draft');
+  blDraftId = null;
+}
+
+// Vérifier brouillon au chargement
+window.addEventListener('load', function() {
+  var draft = loadBLDraftFromStorage();
+  if (draft && (draft.items && draft.items.length > 0 || draft.fournisseur || draft.numero)) {
+    document.getElementById('blDraftFournisseur').textContent = draft.fournisseur || '(sans fournisseur)';
+    document.getElementById('blDraftNumero').textContent = draft.numero || '(sans numéro)';
+    document.getElementById('blDraftDate').textContent = draft.date ? ' — ' + draft.date : '';
+    document.getElementById('blDraftCount').textContent = (draft.items ? draft.items.length : 0) + ' article(s)';
+    document.getElementById('blDraftBanner').style.display = 'flex';
+  }
+  updateBLInfoDisplay();
+});
+
+function resumeBLDraft() {
+  var draft = loadBLDraftFromStorage();
+  if (!draft) return;
+  blItems = draft.items || [];
+  blInfo = { fournisseur: draft.fournisseur || '', numero: draft.numero || '', date: draft.date || '' };
+  blDraftId = draft.id;
+  document.getElementById('blDraftBanner').style.display = 'none';
+  updateBLInfoDisplay();
+  setBLPhase(1);
+  renderBLScanList();
+  toast('📋 BL repris : ' + (blInfo.fournisseur || 'BL') + (blInfo.numero ? ' #' + blInfo.numero : ''));
+}
+
+function discardBLDraft() {
+  clearBLDraft();
+  document.getElementById('blDraftBanner').style.display = 'none';
+  toast('🗑 Brouillon supprimé');
+}
+
+// Auto-save en quittant
+window.addEventListener('beforeunload', function() {
+  if (blItems.length > 0 || blInfo.fournisseur || blInfo.numero) saveBLDraft();
+});
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden && (blItems.length > 0 || blInfo.fournisseur)) saveBLDraft();
+});
+
+// ── MODAL INFO BL ─────────────────────────────────────────
+function openBLInfoModal() {
+  document.getElementById('blInfoFournisseur').value = blInfo.fournisseur || '';
+  document.getElementById('blInfoNumero').value = blInfo.numero || '';
+  document.getElementById('blInfoDate').value = blInfo.date || new Date().toISOString().slice(0,10);
+  document.getElementById('mBLInfo').classList.add('show');
+  setTimeout(function() { document.getElementById('blInfoFournisseur').focus(); }, 350);
+}
+
+function saveBLInfo() {
+  var fournisseur = document.getElementById('blInfoFournisseur').value.trim();
+  var numero = document.getElementById('blInfoNumero').value.trim();
+  var date = document.getElementById('blInfoDate').value;
+  if (!fournisseur) { toast('⚠️ Le nom du fournisseur est obligatoire'); return; }
+  if (!numero) { toast('⚠️ Le numéro de BL est obligatoire'); return; }
+  blInfo = { fournisseur: fournisseur, numero: numero, date: date };
+  closeM('mBLInfo');
+  updateBLInfoDisplay();
+  saveBLDraft();
+  toast('✅ Infos BL enregistrées');
+}
+
+function updateBLInfoDisplay() {
+  var badge = document.getElementById('blInfoBadge');
+  var noInfo = document.getElementById('blInfoPrompt');
+  if (blInfo.fournisseur && blInfo.numero) {
+    badge.style.display = 'flex';
+    document.getElementById('blBadgeFournisseur').textContent = blInfo.fournisseur;
+    document.getElementById('blBadgeNumero').textContent = 'BL #' + blInfo.numero;
+    noInfo.style.display = 'none';
+  } else {
+    badge.style.display = 'none';
+    noInfo.style.display = 'flex';
+  }
+}
 
 function setBLPhase(p) {
   blPhase = p;
@@ -142,9 +250,17 @@ function renderBLScanList() {
   }).join('');
 }
 
-function removeBLScanItem(idx) { blItems.splice(idx, 1); renderBLScanList(); }
+function removeBLScanItem(idx) {
+  blItems.splice(idx, 1);
+  renderBLScanList();
+  saveBLDraft();
+}
 
 function startBLCam() {
+  if (!blInfo.fournisseur || !blInfo.numero) {
+    openBLInfoModal();
+    return;
+  }
   document.getElementById('blStatus').textContent = 'Demande accès caméra…';
   openCamera(document.getElementById('blVid'), function(s) {
     blStream = s;
@@ -155,14 +271,16 @@ function startBLCam() {
     document.getElementById('blBtnStart').style.display    = 'none';
     document.getElementById('blBtnStop').style.display     = 'block';
     blScanning = true;
+    blModalOpen = false;
     document.getElementById('blStatus').textContent = 'Scanner actif';
     document.getElementById('blStatus').className   = 'status ok';
     var bd = makeBarcodeDetector();
     if (!bd) { document.getElementById('blStatus').textContent = 'Saisie manuelle uniquement'; return; }
     function loop() {
       if (!blScanning) return;
+      if (blModalOpen) { requestAnimationFrame(loop); return; } // PAUSE si modal
       bd.detect(vid).then(function(codes) {
-        if (codes.length > 0 && !blCooldown) handleBLScan(codes[0].rawValue);
+        if (codes.length > 0 && !blCooldown && !blModalOpen) handleBLScan(codes[0].rawValue);
         requestAnimationFrame(loop);
       }).catch(function() { requestAnimationFrame(loop); });
     }
@@ -186,10 +304,9 @@ function stopBLCam() {
 }
 
 function handleBLScan(code) {
-  if (blCooldown) return;
+  if (blCooldown || blModalOpen) return;
   blCooldown = true;
   if (navigator.vibrate) navigator.vibrate(70);
-  // Déjà dans le BL en cours → incrémenter
   var existing = blItems.findIndex(function(i) { return i.code === code; });
   if (existing >= 0) {
     blItems[existing].qty++;
@@ -197,10 +314,10 @@ function handleBLScan(code) {
     document.getElementById('blStatus').textContent = '✅ ' + blItems[existing].name + ' (×' + blItems[existing].qty + ')';
     document.getElementById('blStatus').className = 'status ok';
     renderBLScanList();
+    saveBLDraft();
     setTimeout(function() { blCooldown = false; }, 1200);
     return;
   }
-  // Connu dans l'inventaire → ajouter directement
   if (inv[code]) {
     var it = inv[code];
     blItems.push({ code: code, name: it.name, group: it.group || 'Sans groupe', price: it.price || 0, qty: 1 });
@@ -208,17 +325,20 @@ function handleBLScan(code) {
     document.getElementById('blStatus').textContent = '✅ ' + it.name;
     document.getElementById('blStatus').className = 'status ok';
     renderBLScanList();
+    saveBLDraft();
     setTimeout(function() { blCooldown = false; }, 1200);
     return;
   }
-  // Article inconnu → modal saisie
+  // Article inconnu → PAUSE scanner + modal
   blPendingCode = code;
+  blModalOpen = true;
   document.getElementById('blNewCode').textContent = code;
   document.getElementById('blNewName').value  = '';
   document.getElementById('blNewPrice').value = '';
+  document.getElementById('blNewQty').value   = '1';
   _fillBLGroupSelect();
   document.getElementById('mBLNewItem').classList.add('show');
-  document.getElementById('blStatus').textContent = '🆕 Nouvel article — saisissez les infos';
+  document.getElementById('blStatus').textContent = '⏸ Scanner pausé — saisissez les infos';
   document.getElementById('blStatus').className = 'status';
   setTimeout(function() { document.getElementById('blNewName').focus(); }, 350);
   setTimeout(function() { blCooldown = false; }, 1200);
@@ -242,15 +362,27 @@ function _fillBLGroupSelect() {
 function saveBLNewItem() {
   var name  = document.getElementById('blNewName').value.trim();
   var price = parseFloat(document.getElementById('blNewPrice').value) || 0;
+  var qty   = parseInt(document.getElementById('blNewQty').value) || 1;
   var sel   = document.getElementById('blNewGroup');
   var group = sel.value === '__new__'
     ? (document.getElementById('blNewGroupCustom').value.trim() || 'Sans groupe')
     : sel.value;
   if (!name) { toast('⚠️ Nom obligatoire'); return; }
-  blItems.push({ code: blPendingCode, name: name, group: group, price: price, qty: 1 });
+  blItems.push({ code: blPendingCode, name: name, group: group, price: price, qty: qty });
   closeM('mBLNewItem');
+  blModalOpen = false; // REPRENDRE le scan
+  document.getElementById('blStatus').textContent = '✅ ' + name + ' ajouté — scanner actif';
+  document.getElementById('blStatus').className = 'status ok';
   renderBLScanList();
+  saveBLDraft();
   toast('✅ ' + name + ' ajouté au BL');
+}
+
+function closeBLNewItemModal() {
+  closeM('mBLNewItem');
+  blModalOpen = false; // REPRENDRE le scan
+  document.getElementById('blStatus').textContent = 'Scanner actif';
+  document.getElementById('blStatus').className = 'status ok';
 }
 
 function blManualScan() {
@@ -262,6 +394,11 @@ function blManualScan() {
 
 function goToBLRecap() {
   if (!blItems.length) { toast('⚠️ Aucun article scanné'); return; }
+  if (!blInfo.fournisseur || !blInfo.numero) {
+    toast('⚠️ Renseignez d\'abord le fournisseur et le N° de BL');
+    openBLInfoModal();
+    return;
+  }
   stopBLCam();
   setBLPhase(2);
   renderBLRecap();
@@ -293,6 +430,9 @@ function renderBLRecap() {
     '</div>';
   }).join('');
   document.getElementById('blRecapStats').innerHTML =
+    '<div class="bl-stat"><span>Fournisseur</span><strong>' + esc(blInfo.fournisseur) + '</strong></div>' +
+    '<div class="bl-stat"><span>N° BL</span><strong>' + esc(blInfo.numero) + '</strong></div>' +
+    '<div class="bl-stat"><span>Date</span><strong>' + (blInfo.date || '—') + '</strong></div>' +
     '<div class="bl-stat"><span>Articles différents</span><strong>' + blItems.length + '</strong></div>' +
     '<div class="bl-stat"><span>Unités au total</span><strong>' + totalQty + '</strong></div>' +
     (totalHT ? '<div class="bl-stat"><span>Montant total HT</span><strong>' + totalHT.toFixed(2) + ' €</strong></div>' : '');
@@ -310,9 +450,21 @@ function addBLToInventory() {
       batch.set(ref, { code: it.code, name: it.name, group: it.group || 'Sans groupe', price: it.price || 0, qty: it.qty, createdAt: now, updatedAt: now });
     }
   });
+  // Enregistrer dans l'historique BL
+  var blDoc = {
+    fournisseur: blInfo.fournisseur,
+    numero: blInfo.numero,
+    date: blInfo.date || new Date().toISOString().slice(0,10),
+    items: blItems.map(function(i) { return Object.assign({}, i); }),
+    totalQty: blItems.reduce(function(s, i) { return s + i.qty; }, 0),
+    totalHT: blItems.reduce(function(s, i) { return s + (i.price || 0) * i.qty; }, 0),
+    createdAt: now
+  };
+  batch.set(blCol.doc(), blDoc);
   batch.commit()
     .then(function() {
       toast('✅ ' + blItems.length + ' article(s) intégré(s) au stock !');
+      clearBLDraft();
       cancelBL();
     })
     .catch(function(e) { toast('⚠️ Erreur : ' + e.message); });
@@ -320,14 +472,140 @@ function addBLToInventory() {
 
 function cancelBL() {
   stopBLCam();
-  blItems = []; blPhase = 1; blPendingCode = null;
+  blItems = []; blPhase = 1; blPendingCode = null; blModalOpen = false;
+  blInfo = { fournisseur: '', numero: '', date: '' };
+  clearBLDraft();
   setBLPhase(1);
   renderBLScanList();
+  updateBLInfoDisplay();
   toast('🗑 BL annulé');
 }
 
-// Keyboard shortcuts BL
 document.getElementById('blManInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') blManualScan(); });
+
+
+// ══════════════════════════════════════════════════════════
+// ── MODULE HISTORIQUE BL ──────────────────────────────────
+// ══════════════════════════════════════════════════════════
+var blHistoryList     = [];
+var blHistorySort     = 'date_desc';
+var blHistorySearch   = '';
+var blHistoryExpanded = {};
+
+function loadBLHistory() {
+  var el = document.getElementById('blHistoryList');
+  if (el) el.innerHTML = '<div class="empty"><div class="eico">⏳</div><div class="etit">Chargement…</div></div>';
+  blCol.orderBy('createdAt', 'desc').limit(200).get().then(function(snap) {
+    blHistoryList = [];
+    snap.forEach(function(doc) {
+      blHistoryList.push(Object.assign({ _id: doc.id }, doc.data()));
+    });
+    _doRenderBLHistory();
+  }).catch(function(e) {
+    toast('⚠️ Erreur chargement BLs : ' + e.message);
+    if (el) el.innerHTML = '<div class="empty"><div class="eico">⚠️</div><div class="etit">Erreur</div><div class="esub">' + esc(e.message) + '</div></div>';
+  });
+}
+
+function _doRenderBLHistory() {
+  var el = document.getElementById('blHistoryList');
+  if (!el) return;
+  var search = blHistorySearch.toLowerCase().trim();
+  var filtered = blHistoryList.filter(function(bl) {
+    if (!search) return true;
+    return (bl.fournisseur || '').toLowerCase().indexOf(search) >= 0 ||
+           (bl.numero || '').toLowerCase().indexOf(search) >= 0 ||
+           (bl.date || '').indexOf(search) >= 0;
+  });
+  filtered.sort(function(a, b) {
+    switch (blHistorySort) {
+      case 'date_asc':    return (a.createdAt || 0) - (b.createdAt || 0);
+      case 'fournisseur': return (a.fournisseur || '').localeCompare(b.fournisseur || '');
+      case 'numero':      return (a.numero || '').localeCompare(b.numero || '');
+      default:            return (b.createdAt || 0) - (a.createdAt || 0);
+    }
+  });
+  var count = document.getElementById('blHistoryCount');
+  if (count) count.textContent = filtered.length + ' BL' + (filtered.length > 1 ? 's' : '');
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="empty" style="padding:40px 20px"><div class="eico">📋</div><div class="etit">Aucun bon de livraison</div><div class="esub">' +
+      (search ? 'Aucun résultat pour "' + esc(search) + '"' : 'Les BLs validés apparaîtront ici') + '</div></div>';
+    return;
+  }
+
+  el.innerHTML = filtered.map(function(bl) {
+    var dateStr  = bl.date || (bl.createdAt ? new Date(bl.createdAt).toLocaleDateString('fr-FR') : '—');
+    var isExp    = blHistoryExpanded[bl._id];
+    var nItems   = (bl.items || []).length;
+    var totalQty = bl.totalQty || 0;
+    var totalHT  = bl.totalHT  || 0;
+
+    var itemsHtml = '';
+    if (isExp && bl.items && bl.items.length) {
+      itemsHtml = '<div class="bl-hist-items">' +
+        bl.items.map(function(it) {
+          var lt = (it.price || 0) * it.qty;
+          return '<div class="bl-hist-item">' +
+            '<span class="bl-hist-item-name">' + esc(it.name) + '</span>' +
+            '<span class="bl-hist-item-code">' + esc(it.code) + '</span>' +
+            '<span class="bl-hist-item-qty">×' + it.qty + '</span>' +
+            (lt ? '<span class="bl-hist-item-price">' + lt.toFixed(2) + ' €</span>' : '<span></span>') +
+          '</div>';
+        }).join('') +
+        (totalHT ? '<div class="bl-hist-total">Total HT : <strong>' + totalHT.toFixed(2) + ' €</strong></div>' : '') +
+      '</div>';
+    }
+
+    return '<div class="bl-hist-card" id="blhcard_' + bl._id + '">' +
+      '<div class="bl-hist-header" onclick="toggleBLHistoryItem(\'' + bl._id + '\')">' +
+        '<div class="bl-hist-icon">📋</div>' +
+        '<div class="bl-hist-info">' +
+          '<div class="bl-hist-fournisseur">' + esc(bl.fournisseur || '—') + '</div>' +
+          '<div class="bl-hist-meta">' +
+            '<span class="bl-hist-numero">BL #' + esc(bl.numero || '—') + '</span>' +
+            '<span class="bl-hist-date">📅 ' + dateStr + '</span>' +
+          '</div>' +
+          '<div class="bl-hist-stats">' +
+            '<span>' + nItems + ' réf.</span>' +
+            '<span>·</span><span>' + totalQty + ' u.</span>' +
+            (totalHT ? '<span>·</span><span>' + totalHT.toFixed(2) + ' €</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="bl-hist-arrow">' + (isExp ? '▲' : '▼') + '</div>' +
+      '</div>' +
+      itemsHtml +
+    '</div>';
+  }).join('');
+}
+
+function toggleBLHistoryItem(id) {
+  blHistoryExpanded[id] = !blHistoryExpanded[id];
+  _doRenderBLHistory();
+}
+
+function setBLHistorySort(val) {
+  blHistorySort = val;
+  document.querySelectorAll('.bl-hist-sort-btn').forEach(function(b) {
+    b.classList.toggle('on', b.dataset.sort === val);
+  });
+  _doRenderBLHistory();
+}
+
+function onBLHistorySearch() {
+  blHistorySearch = document.getElementById('blHistorySearch').value || '';
+  var cl = document.getElementById('blHistorySearchClear');
+  if (cl) cl.style.display = blHistorySearch ? 'block' : 'none';
+  _doRenderBLHistory();
+}
+
+function clearBLHistorySearch() {
+  document.getElementById('blHistorySearch').value = '';
+  blHistorySearch = '';
+  var cl = document.getElementById('blHistorySearchClear');
+  if (cl) cl.style.display = 'none';
+  _doRenderBLHistory();
+}
 
 
 // ══════════════════════════════════════════════════════════
@@ -336,7 +614,7 @@ document.getElementById('blManInput').addEventListener('keydown', function(e) { 
 var sortieStream   = null;
 var sortieScanning = false;
 var sortieCooldown = false;
-var sortieHistory  = []; // [{code, name, qty, time}]
+var sortieHistory  = [];
 
 function startSortieCam() {
   document.getElementById('sortieStatus').textContent = 'Demande accès caméra…';
@@ -383,7 +661,6 @@ function handleSortie(code) {
   if (sortieCooldown) return;
   sortieCooldown = true;
   if (navigator.vibrate) navigator.vibrate(70);
-
   var item = inv[code];
   if (!item) {
     document.getElementById('mSortieUnknownCode').textContent = 'CODE : ' + code;
@@ -393,7 +670,6 @@ function handleSortie(code) {
     setTimeout(function() { sortieCooldown = false; }, 2000);
     return;
   }
-
   if (item.qty <= 0) {
     toast('⚠️ ' + item.name + ' : stock déjà à 0 !');
     document.getElementById('sortieStatus').textContent = '⚠️ Stock épuisé';
@@ -401,16 +677,13 @@ function handleSortie(code) {
     setTimeout(function() { sortieCooldown = false; }, 1500);
     return;
   }
-
   var capturedQty  = item.qty;
   var capturedName = item.name;
-
   col.doc(code).update({
-    qty:       firebase.firestore.FieldValue.increment(-1),
+    qty: firebase.firestore.FieldValue.increment(-1),
     updatedAt: Date.now()
   }).then(function() {
     var newQty = capturedQty - 1;
-    // Afficher dernier retrait
     document.getElementById('sortieLscode').textContent  = code;
     document.getElementById('sortieLsname').textContent  = capturedName;
     document.getElementById('sortieLsqty').textContent   = 'Stock restant : ' + newQty;
@@ -420,20 +693,11 @@ function handleSortie(code) {
     document.getElementById('sortieStatus').textContent  = '✅ ' + capturedName + ' retiré (reste ' + newQty + ')';
     document.getElementById('sortieStatus').className    = 'status ok';
     toast('📤 −1 ' + capturedName + ' (reste ' + newQty + ')');
-
-    // Ajouter à l'historique de session
     sortieHistory.unshift({ code: code, name: capturedName, qtyBefore: capturedQty, qtyAfter: newQty, time: new Date().toLocaleTimeString('fr-FR') });
     renderSortieHistory();
-
-    if (newQty === 0) {
-      setTimeout(function() { toast('⚠️ ' + capturedName + ' : stock épuisé !'); }, 1000);
-    }
+    if (newQty === 0) setTimeout(function() { toast('⚠️ ' + capturedName + ' : stock épuisé !'); }, 1000);
   }).catch(function(e) { toast('⚠️ ' + e.message); });
-
-  setTimeout(function() {
-    sortieCooldown = false;
-    document.getElementById('sortieStatus').className = 'status ok';
-  }, 1500);
+  setTimeout(function() { sortieCooldown = false; document.getElementById('sortieStatus').className = 'status ok'; }, 1500);
 }
 
 function sortieManualScan() {
@@ -452,20 +716,15 @@ function renderSortieHistory() {
   el.innerHTML = sortieHistory.map(function(h) {
     var badge = h.qtyAfter === 0 ? '⚠️ ÉPUISÉ' : '−1';
     var bCls  = h.qtyAfter === 0 ? 'ls-badge nb' : 'ls-badge fb';
-    return '<div class="icard">' +
-      '<div class="iico">📤</div>' +
-      '<div class="iinf">' +
-        '<div class="iname">' + esc(h.name) + '</div>' +
-        '<div class="icode">' + esc(h.code) + ' · ' + h.time + '</div>' +
-        '<div class="igrp">Reste en stock : ' + h.qtyAfter + '</div>' +
-      '</div>' +
-      '<div class="irt"><span class="' + bCls + '">' + badge + '</span></div>' +
-    '</div>';
+    return '<div class="icard"><div class="iico">📤</div><div class="iinf">' +
+      '<div class="iname">' + esc(h.name) + '</div>' +
+      '<div class="icode">' + esc(h.code) + ' · ' + h.time + '</div>' +
+      '<div class="igrp">Reste en stock : ' + h.qtyAfter + '</div>' +
+      '</div><div class="irt"><span class="' + bCls + '">' + badge + '</span></div></div>';
   }).join('');
 }
 
 function clearSortieHistory() { sortieHistory = []; renderSortieHistory(); toast('🗑 Historique effacé'); }
-
 document.getElementById('sortieManInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') sortieManualScan(); });
 
 
@@ -475,8 +734,8 @@ document.getElementById('sortieManInput').addEventListener('keydown', function(e
 var invStream     = null;
 var invScanning   = false;
 var invCooldown   = false;
-var invSession    = {};  // {code: qtyScanned} — comptage de la session
-var invPendingNew = null; // code en attente de création
+var invSession    = {};
+var invPendingNew = null;
 
 function startInventaire() {
   invSession = {};
@@ -541,18 +800,15 @@ function handleInvScan(code) {
   if (invCooldown) return;
   invCooldown = true;
   if (navigator.vibrate) navigator.vibrate(70);
-
   if (inv[code]) {
-    // Article connu : incrémenter le comptage de session
     invSession[code] = (invSession[code] || 0) + 1;
     var newCount = invSession[code];
     var stockQty = inv[code].qty;
     var diff     = newCount - stockQty;
     var badge, badgeCls;
-    if (diff === 0)      { badge = '✅ OK';    badgeCls = 'ls-badge fb'; }
-    else if (diff > 0)   { badge = '+' + diff + ' excédent'; badgeCls = 'ls-badge'; }
-    else                 { badge = diff + ' manquant';        badgeCls = 'ls-badge nb'; }
-
+    if (diff === 0)    { badge = '✅ OK';           badgeCls = 'ls-badge fb'; }
+    else if (diff > 0) { badge = '+' + diff + ' excédent'; badgeCls = 'ls-badge'; }
+    else               { badge = diff + ' manquant';       badgeCls = 'ls-badge nb'; }
     document.getElementById('invLscode').textContent  = code;
     document.getElementById('invLsname').textContent  = inv[code].name;
     document.getElementById('invLsqty').textContent   = 'Scanné : ' + newCount + ' / Stock : ' + stockQty;
@@ -563,7 +819,6 @@ function handleInvScan(code) {
     document.getElementById('invStatus').className    = 'status ok';
     toast('✅ ' + inv[code].name + ' ×' + newCount);
   } else {
-    // Article INCONNU → alerte + proposition de création
     stopInvCam();
     invPendingNew = code;
     document.getElementById('mNewInvCode').textContent = 'CODE : ' + code;
@@ -576,7 +831,6 @@ function handleInvScan(code) {
     document.getElementById('invStatus').className   = 'status err';
     toast('⚠️ Code inconnu : ' + code);
   }
-
   renderInvScannedList();
   updateInvProgress();
   setTimeout(function() { invCooldown = false; }, 1200);
@@ -592,7 +846,6 @@ function saveNewInvProduct() {
   var now = Date.now();
   col.doc(code).set({ code: code, name: name, group: group, price: price, qty: 0, createdAt: now, updatedAt: now })
     .then(function() {
-      // Compter l'article dans la session
       invSession[code] = (invSession[code] || 0) + 1;
       closeM('mNewInv');
       toast('✅ ' + name + ' créé et ajouté à l\'inventaire');
@@ -626,12 +879,10 @@ function renderInvScannedList() {
     var icon     = diff === 0 ? '✅' : diff > 0 ? '⚠️' : '❌';
     var diffTxt  = diff === 0 ? 'OK' : (diff > 0 ? '+' + diff : String(diff));
     var diffCls  = diff === 0 ? 'var(--green)' : diff > 0 ? 'var(--cyan)' : 'var(--red)';
-    return '<div class="icard">' +
-      '<div class="iico">' + icon + '</div>' +
-      '<div class="iinf"><div class="iname">' + esc(name) + '</div><div class="icode">' + esc(code) + '</div>' +
+    return '<div class="icard"><div class="iico">' + icon + '</div><div class="iinf">' +
+      '<div class="iname">' + esc(name) + '</div><div class="icode">' + esc(code) + '</div>' +
       '<div class="igrp">Scanné : ' + scanned + ' · Stock : ' + stockQty + '</div></div>' +
-      '<div class="irt"><div class="iqty" style="color:' + diffCls + '">' + diffTxt + '</div></div>' +
-    '</div>';
+      '<div class="irt"><div class="iqty" style="color:' + diffCls + '">' + diffTxt + '</div></div></div>';
   }).join('');
 }
 
@@ -645,73 +896,51 @@ function updateInvProgress() {
 
 function finishInventaire() {
   stopInvCam();
-  // Construire le rapport : toutes les références du stock + celles scannées mais inconnues
   var reportItems = [];
   var allCodes    = new Set(Object.keys(inv).concat(Object.keys(invSession)));
   var totalDiff   = 0;
-
   allCodes.forEach(function(code) {
-    var stockQty  = inv[code] ? (inv[code].qty || 0) : 0;
-    var scanned   = invSession[code] || 0;
-    var diff      = scanned - stockQty;
-    var price     = inv[code] ? (inv[code].price || 0) : 0;
-    var name      = inv[code] ? inv[code].name : ('Inconnu ' + code);
-    totalDiff    += diff * price;
+    var stockQty = inv[code] ? (inv[code].qty || 0) : 0;
+    var scanned  = invSession[code] || 0;
+    var diff     = scanned - stockQty;
+    var price    = inv[code] ? (inv[code].price || 0) : 0;
+    var name     = inv[code] ? inv[code].name : ('Inconnu ' + code);
+    totalDiff   += diff * price;
     reportItems.push({ code: code, name: name, stockQty: stockQty, scanned: scanned, diff: diff, price: price });
   });
-
-  // Trier : écarts d'abord
   reportItems.sort(function(a, b) { return Math.abs(b.diff) - Math.abs(a.diff); });
-
-  // Stats
-  var nOk      = reportItems.filter(function(r) { return r.diff === 0; }).length;
+  var nOk = reportItems.filter(function(r) { return r.diff === 0; }).length;
   var nMissing = reportItems.filter(function(r) { return r.diff < 0; }).length;
   var nExtra   = reportItems.filter(function(r) { return r.diff > 0; }).length;
-  var nTotal   = reportItems.length;
-
   document.getElementById('invActive').style.display = 'none';
   document.getElementById('invReport').style.display = 'block';
   document.getElementById('invReportDate').textContent = new Date().toLocaleString('fr-FR');
-
   document.getElementById('invSummaryGrid').innerHTML =
     '<div class="inv-stat-card ok"><div class="inv-stat-val">' + nOk + '</div><div class="inv-stat-lbl">Conformes</div></div>' +
     '<div class="inv-stat-card err"><div class="inv-stat-val">' + nMissing + '</div><div class="inv-stat-lbl">Manquants</div></div>' +
     '<div class="inv-stat-card warn"><div class="inv-stat-val">' + nExtra + '</div><div class="inv-stat-lbl">Excédents</div></div>' +
-    '<div class="inv-stat-card"><div class="inv-stat-val">' + nTotal + '</div><div class="inv-stat-lbl">Total réf.</div></div>';
-
-  // Liste des écarts (masquer ceux à 0 si tout est OK, sinon montrer tout)
+    '<div class="inv-stat-card"><div class="inv-stat-val">' + reportItems.length + '</div><div class="inv-stat-lbl">Total réf.</div></div>';
   var itemsWithDiff = reportItems.filter(function(r) { return r.diff !== 0; });
   if (!itemsWithDiff.length) {
-    document.getElementById('invReportList').innerHTML =
-      '<div class="empty" style="padding:20px 0"><div class="eico">✅</div><div class="etit">Inventaire parfait !</div><div class="esub">Toutes les quantités correspondent</div></div>';
+    document.getElementById('invReportList').innerHTML = '<div class="empty" style="padding:20px 0"><div class="eico">✅</div><div class="etit">Inventaire parfait !</div><div class="esub">Toutes les quantités correspondent</div></div>';
   } else {
     document.getElementById('invReportList').innerHTML = itemsWithDiff.map(function(r) {
-      var icon    = r.diff > 0 ? '⚠️' : '❌';
+      var icon = r.diff > 0 ? '⚠️' : '❌';
       var diffTxt = (r.diff > 0 ? '+' : '') + r.diff;
-      var diffVal = (r.diff * r.price).toFixed(2);
-      var sign    = r.diff > 0 ? '+' : '';
-      var color   = r.diff > 0 ? 'var(--cyan)' : 'var(--red)';
-      return '<div class="icard">' +
-        '<div class="iico">' + icon + '</div>' +
-        '<div class="iinf">' +
-          '<div class="iname">' + esc(r.name) + '</div>' +
-          '<div class="icode">' + esc(r.code) + '</div>' +
-          '<div class="igrp">Stock : ' + r.stockQty + ' · Scanné : ' + r.scanned + (r.price ? ' · ' + r.price.toFixed(2) + ' €/u' : '') + '</div>' +
-        '</div>' +
-        '<div class="irt">' +
-          '<div class="iqty" style="color:' + color + '">' + diffTxt + '</div>' +
-          '<div class="iprc" style="color:' + color + '">' + sign + diffVal + ' €</div>' +
-        '</div>' +
-      '</div>';
+      var sign = r.diff > 0 ? '+' : '';
+      var color = r.diff > 0 ? 'var(--cyan)' : 'var(--red)';
+      return '<div class="icard"><div class="iico">' + icon + '</div><div class="iinf">' +
+        '<div class="iname">' + esc(r.name) + '</div><div class="icode">' + esc(r.code) + '</div>' +
+        '<div class="igrp">Stock : ' + r.stockQty + ' · Scanné : ' + r.scanned + (r.price ? ' · ' + r.price.toFixed(2) + ' €/u' : '') + '</div></div>' +
+        '<div class="irt"><div class="iqty" style="color:' + color + '">' + diffTxt + '</div>' +
+        '<div class="iprc" style="color:' + color + '">' + sign + (r.diff * r.price).toFixed(2) + ' €</div></div></div>';
     }).join('');
   }
-
-  // Total financier
   var sign = totalDiff >= 0 ? '+' : '';
   document.getElementById('invReportTotal').innerHTML =
-    '<div class="bl-total"><span>Écart financier total</span><span class="bl-total-val" style="color:' + (totalDiff < 0 ? 'var(--red)' : totalDiff > 0 ? 'var(--cyan)' : 'var(--green)') + '">' + sign + totalDiff.toFixed(2) + ' €</span></div>';
-
-  // Stocker le rapport pour correction
+    '<div class="bl-total"><span>Écart financier total</span><span class="bl-total-val" style="color:' +
+    (totalDiff < 0 ? 'var(--red)' : totalDiff > 0 ? 'var(--cyan)' : 'var(--green)') + '">' +
+    sign + totalDiff.toFixed(2) + ' €</span></div>';
   window._invReportItems = reportItems;
 }
 
@@ -719,27 +948,19 @@ function applyInventaire() {
   if (!window._invReportItems) { toast('⚠️ Pas de rapport disponible'); return; }
   var items = window._invReportItems.filter(function(r) { return r.diff !== 0; });
   if (!items.length) { toast('✅ Aucune correction nécessaire'); resetInventaire(); return; }
-
   if (!confirm('Mettre à jour ' + items.length + ' article(s) dans le stock selon le comptage physique ?')) return;
-
   var batch = db.batch();
   var now   = Date.now();
   items.forEach(function(r) {
-    if (inv[r.code]) {
-      batch.update(col.doc(r.code), { qty: r.scanned, updatedAt: now });
-    }
+    if (inv[r.code]) batch.update(col.doc(r.code), { qty: r.scanned, updatedAt: now });
   });
   batch.commit()
-    .then(function() {
-      toast('✅ Stock mis à jour — ' + items.length + ' correction(s) appliquée(s)');
-      resetInventaire();
-    })
+    .then(function() { toast('✅ Stock mis à jour — ' + items.length + ' correction(s) appliquée(s)'); resetInventaire(); })
     .catch(function(e) { toast('⚠️ ' + e.message); });
 }
 
 function resetInventaire() {
-  invSession = [];
-  window._invReportItems = null;
+  invSession = []; window._invReportItems = null;
   document.getElementById('invIdle').style.display   = 'block';
   document.getElementById('invActive').style.display = 'none';
   document.getElementById('invReport').style.display = 'none';
@@ -749,58 +970,43 @@ document.getElementById('invManInput').addEventListener('keydown', function(e) {
 
 
 // ══════════════════════════════════════════════════════════
-// ── MODULE STOCK (recherche / tri) ────────────────────────
+// ── MODULE STOCK ──────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
 var stockSortBy  = 'name';
-var stockSortDir = 1; // 1 = asc, -1 = desc
+var stockSortDir = 1;
 
 function renderStock() {
   var query = (document.getElementById('stockSearch').value || '').toLowerCase().trim();
   var items = Object.values(inv);
-
-  // Bouton clear
   document.getElementById('stockSearchClear').style.display = query ? 'block' : 'none';
-
-  // Filtrage
   if (query) {
     items = items.filter(function(it) {
-      return (it.name  || '').toLowerCase().indexOf(query) >= 0 ||
-             (it.code  || '').toLowerCase().indexOf(query) >= 0 ||
+      return (it.name || '').toLowerCase().indexOf(query) >= 0 ||
+             (it.code || '').toLowerCase().indexOf(query) >= 0 ||
              (it.group || '').toLowerCase().indexOf(query) >= 0;
     });
   }
-
-  // Tri
   items.sort(function(a, b) {
     var va = a[stockSortBy], vb = b[stockSortBy];
     if (typeof va === 'string') return stockSortDir * va.localeCompare(vb || '');
     return stockSortDir * ((va || 0) - (vb || 0));
   });
-
-  var list  = document.getElementById('stockList');
+  var list = document.getElementById('stockList');
   var empty = document.getElementById('stockEmpty');
   var count = document.getElementById('stockCount');
-
-  if (!items.length) {
-    list.innerHTML = ''; empty.style.display = 'block';
-    count.textContent = ''; return;
-  }
+  if (!items.length) { list.innerHTML = ''; empty.style.display = 'block'; count.textContent = ''; return; }
   empty.style.display = 'none';
-  count.textContent   = items.length + ' article' + (items.length > 1 ? 's' : '') +
+  count.textContent = items.length + ' article' + (items.length > 1 ? 's' : '') +
     (query ? ' · résultat' + (items.length > 1 ? 's' : '') + ' pour "' + query + '"' : '');
-
   list.innerHTML = items.map(function(it) {
     var total = (it.price || 0) * (it.qty || 0);
     var qtyClass = it.qty === 0 ? 'iqty red' : (it.qty <= 2 ? 'iqty warn' : 'iqty');
     return '<div class="icard" onclick="openStockEdit(\'' + esc(it.code) + '\')" style="cursor:pointer">' +
-      '<div class="iico">📦</div>' +
-      '<div class="iinf">' +
-        '<div class="iname">' + esc(it.name) + '</div>' +
-        '<div class="icode">' + esc(it.code) + '</div>' +
-        '<div class="igrp">' + esc(it.group || 'Sans groupe') + (it.price ? ' · ' + it.price.toFixed(2) + ' €/u' : '') + (total ? ' · Total : ' + total.toFixed(2) + ' €' : '') + '</div>' +
-      '</div>' +
-      '<div class="irt"><div class="' + qtyClass + '">' + (it.qty || 0) + '</div></div>' +
-    '</div>';
+      '<div class="iico">📦</div><div class="iinf">' +
+      '<div class="iname">' + esc(it.name) + '</div>' +
+      '<div class="icode">' + esc(it.code) + '</div>' +
+      '<div class="igrp">' + esc(it.group || 'Sans groupe') + (it.price ? ' · ' + it.price.toFixed(2) + ' €/u' : '') + (total ? ' · Total : ' + total.toFixed(2) + ' €' : '') + '</div>' +
+      '</div><div class="irt"><div class="' + qtyClass + '">' + (it.qty || 0) + '</div></div></div>';
   }).join('');
 }
 
@@ -809,11 +1015,7 @@ function setStockSort(field) {
   else { stockSortBy = field; stockSortDir = 1; }
   document.querySelectorAll('.sort-btn').forEach(function(b) { b.classList.remove('on'); b.querySelector('.sort-arrow') && (b.querySelector('.sort-arrow').textContent = ''); });
   var btn = document.getElementById('sortBtn-' + field);
-  if (btn) {
-    btn.classList.add('on');
-    var arrow = btn.querySelector('.sort-arrow');
-    if (arrow) arrow.textContent = stockSortDir === 1 ? '▲' : '▼';
-  }
+  if (btn) { btn.classList.add('on'); var arr = btn.querySelector('.sort-arrow'); if (arr) arr.textContent = stockSortDir === 1 ? '▲' : '▼'; }
   renderStock();
 }
 
@@ -824,42 +1026,35 @@ function clearStockSearch() {
 }
 
 function openStockEdit(code) {
-  var it = inv[code];
-  if (!it) return;
-  document.getElementById('stockEditCode').value          = code;
+  var it = inv[code]; if (!it) return;
+  document.getElementById('stockEditCode').value = code;
   document.getElementById('stockEditCodeDisplay').textContent = code;
-  document.getElementById('stockEditName').value          = it.name  || '';
-  document.getElementById('stockEditPrice').value         = it.price || '';
-  document.getElementById('stockEditQty').value           = it.qty   || 0;
+  document.getElementById('stockEditName').value  = it.name  || '';
+  document.getElementById('stockEditPrice').value = it.price || '';
+  document.getElementById('stockEditQty').value   = it.qty   || 0;
   _fillStockGroupSelect(it.group || 'Sans groupe');
   document.getElementById('mStockEdit').classList.add('show');
 }
 
 function _fillStockGroupSelect(currentGroup) {
   var groups = ['Sans groupe'];
-  Object.values(inv).forEach(function(it) {
-    if (it.group && groups.indexOf(it.group) < 0) groups.push(it.group);
-  });
+  Object.values(inv).forEach(function(it) { if (it.group && groups.indexOf(it.group) < 0) groups.push(it.group); });
   if (currentGroup && groups.indexOf(currentGroup) < 0) groups.push(currentGroup);
   var sel = document.getElementById('stockEditGroup');
   sel.innerHTML = groups.map(function(g) {
     return '<option value="' + esc(g) + '"' + (g === currentGroup ? ' selected' : '') + '>' + esc(g) + '</option>';
   }).join('') + '<option value="__new__">+ Nouveau groupe…</option>';
   document.getElementById('stockEditGroupCustom').style.display = 'none';
-  sel.onchange = function() {
-    document.getElementById('stockEditGroupCustom').style.display = sel.value === '__new__' ? 'block' : 'none';
-  };
+  sel.onchange = function() { document.getElementById('stockEditGroupCustom').style.display = sel.value === '__new__' ? 'block' : 'none'; };
 }
 
 function saveStockEdit() {
   var code  = document.getElementById('stockEditCode').value;
   var name  = document.getElementById('stockEditName').value.trim();
   var price = parseFloat(document.getElementById('stockEditPrice').value) || 0;
-  var qty   = parseInt(document.getElementById('stockEditQty').value)   || 0;
+  var qty   = parseInt(document.getElementById('stockEditQty').value) || 0;
   var sel   = document.getElementById('stockEditGroup');
-  var group = sel.value === '__new__'
-    ? (document.getElementById('stockEditGroupCustom').value.trim() || 'Sans groupe')
-    : sel.value;
+  var group = sel.value === '__new__' ? (document.getElementById('stockEditGroupCustom').value.trim() || 'Sans groupe') : sel.value;
   if (!name) { toast('⚠️ Nom obligatoire'); return; }
   col.doc(code).update({ name: name, group: group, price: price, qty: qty, updatedAt: Date.now() })
     .then(function() { closeM('mStockEdit'); renderStock(); toast('✅ Article mis à jour'); })
@@ -875,7 +1070,6 @@ function deleteStockItem() {
     .catch(function(e) { toast('⚠️ Erreur : ' + e.message); });
 }
 
-// ── Recherche depuis douchette sur l'onglet stock
 function handleStockDouchette(code) {
   document.getElementById('stockSearch').value = code;
   renderStock();
@@ -884,52 +1078,32 @@ function handleStockDouchette(code) {
 // ══════════════════════════════════════════════════════════
 // ── DOUCHETTE USB / BLUETOOTH ─────────────────────────────
 // ══════════════════════════════════════════════════════════
-// Une douchette se comporte comme un clavier rapide :
-// elle envoie les caractères du code très vite puis appuie
-// sur Entrée. On détecte ça en chronométrant les frappes.
-var _dbuf   = '';
-var _dtimer = null;
-
+var _dbuf = '', _dtimer = null;
 document.addEventListener('keydown', function(e) {
   var tag = (document.activeElement || {}).tagName || '';
   var isInInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-
   if (e.key === 'Enter' && _dbuf.length >= 3) {
-    var code = _dbuf;
-    _dbuf = ''; clearTimeout(_dtimer);
-    _dispatchDouchette(code);
-    return;
+    var code = _dbuf; _dbuf = ''; clearTimeout(_dtimer); _dispatchDouchette(code); return;
   }
-
-  // Ignorer si on est dans un champ de texte (sauf pour la douchette détectée)
-  if (isInInput && e.key !== 'Enter') {
-    // Reset buffer si l'utilisateur tape manuellement (délai > 80ms)
-    return;
-  }
-
+  if (isInInput && e.key !== 'Enter') return;
   if (e.key.length === 1) {
-    _dbuf += e.key;
-    clearTimeout(_dtimer);
-    // Si pas de nouvel input dans 80ms → pas une douchette, vider
+    _dbuf += e.key; clearTimeout(_dtimer);
     _dtimer = setTimeout(function() { _dbuf = ''; }, 80);
   }
 });
 
 function _dispatchDouchette(code) {
   if (!code) return;
-  // Afficher le toast douchette
-  var toast_el = document.getElementById('douchetteToast');
+  var te = document.getElementById('douchetteToast');
   document.getElementById('douchetteToastCode').textContent = code;
-  toast_el.style.display = 'flex';
-  clearTimeout(_dispatchDouchette._hideTimer);
-  _dispatchDouchette._hideTimer = setTimeout(function() { toast_el.style.display = 'none'; }, 1800);
-
-  // Router vers la bonne fonction selon l'onglet actif
-  var activePage = (document.querySelector('.page.on') || {}).id || '';
-  if      (activePage === 'page-bl'          && blPhase === 1)   handleBLScan(code);
-  else if (activePage === 'page-sortie')                          handleSortie(code);
-  else if (activePage === 'page-inventaire'  && invScanning)      handleInvScan(code);
-  else if (activePage === 'page-stock')                           handleStockDouchette(code);
+  te.style.display = 'flex';
+  clearTimeout(_dispatchDouchette._t);
+  _dispatchDouchette._t = setTimeout(function() { te.style.display = 'none'; }, 1800);
+  var ap = (document.querySelector('.page.on') || {}).id || '';
+  if      (ap === 'page-bl'        && blPhase === 1) handleBLScan(code);
+  else if (ap === 'page-sortie')                      handleSortie(code);
+  else if (ap === 'page-inventaire' && invScanning)   handleInvScan(code);
+  else if (ap === 'page-stock')                       handleStockDouchette(code);
   else toast('🔫 Code scanné : ' + code);
 }
 
@@ -938,50 +1112,28 @@ function _dispatchDouchette(code) {
 // ══════════════════════════════════════════════════════════
 function renderPreview() {
   var items = Object.values(inv);
-  var b = document.getElementById('ptbody');
-  if (!b) return;
-  if (!items.length) {
-    b.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:18px">Inventaire vide</td></tr>';
-    return;
-  }
+  var b = document.getElementById('ptbody'); if (!b) return;
+  if (!items.length) { b.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:18px">Inventaire vide</td></tr>'; return; }
   var total = items.reduce(function(s, i) { return s + (i.price || 0) * i.qty; }, 0);
   b.innerHTML = items.map(function(it) {
-    return '<tr>' +
-      '<td class="td-mono">'  + esc(it.code) + '</td>' +
-      '<td>'                  + esc(it.name) + '</td>' +
-      '<td>'                  + esc(it.group || '—') + '</td>' +
-      '<td class="td-green">' + it.qty + '</td>' +
-      '<td class="td-mono">'  + (it.price ? it.price.toFixed(2) : '—') + '</td>' +
-      '<td class="td-cyan">'  + (it.price ? (it.price * it.qty).toFixed(2) : '—') + '</td>' +
-    '</tr>';
-  }).join('') +
-  '<tr style="background:var(--surf2);font-weight:700"><td colspan="5" style="text-align:right;color:var(--dim)">TOTAL</td><td class="td-cyan">' + total.toFixed(2) + ' €</td></tr>';
+    return '<tr><td class="td-mono">' + esc(it.code) + '</td><td>' + esc(it.name) + '</td><td>' + esc(it.group || '—') + '</td>' +
+      '<td class="td-green">' + it.qty + '</td><td class="td-mono">' + (it.price ? it.price.toFixed(2) : '—') + '</td>' +
+      '<td class="td-cyan">' + (it.price ? (it.price * it.qty).toFixed(2) : '—') + '</td></tr>';
+  }).join('') + '<tr style="background:var(--surf2);font-weight:700"><td colspan="5" style="text-align:right;color:var(--dim)">TOTAL</td><td class="td-cyan">' + total.toFixed(2) + ' €</td></tr>';
 }
 
 function downloadXLSX() {
   if (!Object.keys(inv).length) { toast('⚠️ Inventaire vide'); return; }
   var items = Object.values(inv);
   var data  = [['Code-barres', 'Nom', 'Groupe', 'Quantité', 'Prix unitaire (€)', 'Total (€)']];
-  items.forEach(function(it) {
-    data.push([
-      it.code, it.name, it.group || '',
-      it.qty,
-      (it.price || 0),
-      ((it.price || 0) * it.qty)
-    ]);
-  });
+  items.forEach(function(it) { data.push([it.code, it.name, it.group || '', it.qty, (it.price || 0), ((it.price || 0) * it.qty)]); });
   var total = items.reduce(function(s, i) { return s + (i.price || 0) * i.qty; }, 0);
   data.push(['', '', '', '', 'TOTAL', total]);
-
   var wb = XLSX.utils.book_new();
   var ws = XLSX.utils.aoa_to_sheet(data);
-
-  // Largeurs colonnes
   ws['!cols'] = [{ wch: 18 }, { wch: 35 }, { wch: 20 }, { wch: 10 }, { wch: 18 }, { wch: 14 }];
-
   XLSX.utils.book_append_sheet(wb, ws, 'Inventaire');
-  var date = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, 'inventaire_' + date + '.xlsx');
+  XLSX.writeFile(wb, 'inventaire_' + new Date().toISOString().slice(0, 10) + '.xlsx');
   toast('⬇️ Fichier Excel téléchargé !');
 }
 
@@ -989,15 +1141,10 @@ function buildCSV() {
   var items = Object.values(inv);
   var lines = ['\uFEFF' + 'Code-barres;Nom;Groupe;Quantite;Prix (EUR);Total (EUR)'];
   items.forEach(function(it) {
-    lines.push([
-      it.code, it.name, it.group || '',
-      it.qty,
-      (it.price || 0).toFixed(2),
-      ((it.price || 0) * it.qty).toFixed(2)
-    ].map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'));
+    lines.push([it.code, it.name, it.group || '', it.qty, (it.price || 0).toFixed(2), ((it.price || 0) * it.qty).toFixed(2)]
+      .map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'));
   });
-  var total = items.reduce(function(s, i) { return s + (i.price || 0) * i.qty; }, 0);
-  lines.push(';;;\"TOTAL\";;' + total.toFixed(2));
+  lines.push(';;;"TOTAL";;' + items.reduce(function(s, i) { return s + (i.price || 0) * i.qty; }, 0).toFixed(2));
   return lines.join('\r\n');
 }
 
@@ -1018,11 +1165,11 @@ function exportMail() {
   if (!email) { toast('⚠️ Entrez une adresse email'); return; }
   downloadXLSX();
   var items = Object.values(inv);
-  var qty   = items.reduce(function(s, i) { return s + i.qty; }, 0);
-  var val   = items.reduce(function(s, i) { return s + (i.price || 0) * i.qty; }, 0).toFixed(2);
-  var d     = new Date().toLocaleDateString('fr-FR');
-  var corps = 'Bonjour,\n\nInventaire exporté le ' + d + '.\n\nRésumé :\n- Références : ' + items.length + '\n- Quantité totale : ' + qty + '\n- Valeur totale : ' + val + ' EUR\n\nLe fichier Excel a été téléchargé sur votre appareil — joignez-le à cet email.\n\nCordialement';
-  window.location.href = 'mailto:' + email + '?subject=' + encodeURIComponent('Inventaire - ' + d) + '&body=' + encodeURIComponent(corps);
+  var qty = items.reduce(function(s, i) { return s + i.qty; }, 0);
+  var val = items.reduce(function(s, i) { return s + (i.price || 0) * i.qty; }, 0).toFixed(2);
+  var d = new Date().toLocaleDateString('fr-FR');
+  window.location.href = 'mailto:' + email + '?subject=' + encodeURIComponent('Inventaire - ' + d) +
+    '&body=' + encodeURIComponent('Bonjour,\n\nInventaire exporté le ' + d + '.\n\nRésumé :\n- Références : ' + items.length + '\n- Quantité totale : ' + qty + '\n- Valeur totale : ' + val + ' EUR\n\nCordialement');
   toast('📧 Client mail ouvert');
 }
 
@@ -1030,7 +1177,5 @@ function clearAll() {
   if (!confirm('Effacer TOUT l\'inventaire sur TOUS les appareils ?\nAction irréversible.')) return;
   var batch = db.batch();
   Object.keys(inv).forEach(function(code) { batch.delete(col.doc(code)); });
-  batch.commit()
-    .then(function() { toast('🗑 Inventaire effacé sur tous les appareils'); })
-    .catch(function(e) { toast('⚠️ ' + e.message); });
+  batch.commit().then(function() { toast('🗑 Inventaire effacé sur tous les appareils'); }).catch(function(e) { toast('⚠️ ' + e.message); });
 }

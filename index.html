@@ -25,6 +25,7 @@
 
 <div class="tabs">
   <div class="tab on"  onclick="goTab('bl',this)">📋 BL</div>
+  <div class="tab"     onclick="goTab('historique-bl',this)">📂 Histo BL</div>
   <div class="tab"     onclick="goTab('sortie',this)">📤 Sortie</div>
   <div class="tab"     onclick="goTab('stock',this)">🗃️ Stock</div>
   <div class="tab"     onclick="goTab('inventaire',this)">📦 Inventaire</div>
@@ -35,7 +36,40 @@
 <!-- PAGE BL                                                 -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="page on" id="page-bl">
-  <div class="bl-steps">
+
+  <!-- BANNER BROUILLON -->
+  <div id="blDraftBanner" class="bl-draft-banner" style="display:none">
+    <div class="bl-draft-ico">💾</div>
+    <div class="bl-draft-txt">
+      <strong>BL en cours non terminé</strong>
+      <span id="blDraftFournisseur"></span><span id="blDraftDate"></span> — <span id="blDraftCount"></span>
+      <span style="font-size:10px;opacity:.7;display:block">N° <span id="blDraftNumero"></span></span>
+    </div>
+    <div class="bl-draft-actions">
+      <button class="btn bg" style="width:auto;padding:7px 12px;font-size:12px;margin:0" onclick="resumeBLDraft()">↩ Reprendre</button>
+      <button class="btn br2" style="width:auto;padding:7px 10px;font-size:12px;margin:0" onclick="discardBLDraft()">🗑</button>
+    </div>
+  </div>
+
+  <!-- INFO BL (Fournisseur + N°BL) -->
+  <div id="blInfoPrompt" class="bl-info-prompt" style="display:flex">
+    <div class="bl-info-prompt-ico">📋</div>
+    <div class="bl-info-prompt-txt">
+      <strong>Renseignez le bon de livraison</strong>
+      <span>Fournisseur et numéro de BL requis</span>
+    </div>
+    <button class="btn bp" style="width:auto;padding:8px 14px;font-size:13px;margin:0;flex-shrink:0" onclick="openBLInfoModal()">Saisir</button>
+  </div>
+  <div id="blInfoBadge" class="bl-info-badge" style="display:none">
+    <div class="bl-badge-icon">🏭</div>
+    <div class="bl-badge-txt">
+      <div class="bl-badge-fournisseur" id="blBadgeFournisseur"></div>
+      <div class="bl-badge-numero" id="blBadgeNumero"></div>
+    </div>
+    <button class="btn bs" style="width:auto;padding:6px 10px;font-size:12px;margin:0;flex-shrink:0" onclick="openBLInfoModal()">✏️</button>
+  </div>
+
+  <div class="bl-steps" style="margin-top:12px">
     <div class="bl-step on" id="blStep1">1</div>
     <div class="bl-step-line" id="blLine1"></div>
     <div class="bl-step" id="blStep2">2</div>
@@ -90,12 +124,44 @@
     <button class="btn br2" onclick="cancelBL()" style="margin-top:8px">🗑 Annuler et vider le BL</button>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- PAGE HISTORIQUE BL                                      -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="page" id="page-historique-bl">
+
+  <!-- Barre de recherche -->
+  <div class="stock-topbar">
+    <div class="stock-search-wrap">
+      <span class="stock-search-ico">🔍</span>
+      <input class="stock-search-inp" id="blHistorySearch" placeholder="Fournisseur, N° BL, date…" oninput="onBLHistorySearch()" autocomplete="off" type="search"/>
+      <button class="stock-search-clear" id="blHistorySearchClear" onclick="clearBLHistorySearch()" style="display:none">✕</button>
+    </div>
+  </div>
+
+  <!-- Barre de tri -->
+  <div class="stock-sort-bar">
+    <span class="stock-sort-lbl">Trier :</span>
+    <button class="bl-hist-sort-btn on" data-sort="date_desc" onclick="setBLHistorySort('date_desc')">Date ↓</button>
+    <button class="bl-hist-sort-btn" data-sort="date_asc" onclick="setBLHistorySort('date_asc')">Date ↑</button>
+    <button class="bl-hist-sort-btn" data-sort="fournisseur" onclick="setBLHistorySort('fournisseur')">Fournisseur</button>
+    <button class="bl-hist-sort-btn" data-sort="numero" onclick="setBLHistorySort('numero')">N° BL</button>
+  </div>
+
+  <div id="blHistoryCount" class="stock-count"></div>
+  <div id="blHistoryList" class="ilist">
+    <div class="empty" style="padding:40px 20px">
+      <div class="eico">📋</div>
+      <div class="etit">Historique des BLs</div>
+      <div class="esub">Ouvrez cet onglet pour charger les BLs validés</div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════ -->
 <!-- PAGE STOCK                                              -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="page" id="page-stock">
-
-  <!-- Barre de recherche -->
   <div class="stock-topbar">
     <div class="stock-search-wrap">
       <span class="stock-search-ico">🔍</span>
@@ -103,21 +169,17 @@
       <button class="stock-search-clear" id="stockSearchClear" onclick="clearStockSearch()" style="display:none">✕</button>
     </div>
   </div>
-
-  <!-- Barre de tri -->
   <div class="stock-sort-bar">
     <span class="stock-sort-lbl">Trier :</span>
-    <button class="sort-btn on" id="sortBtn-name"   onclick="setStockSort('name')">Nom <span class="sort-arrow">▲</span></button>
-    <button class="sort-btn"   id="sortBtn-group"  onclick="setStockSort('group')">Catégorie <span class="sort-arrow"></span></button>
-    <button class="sort-btn"   id="sortBtn-qty"    onclick="setStockSort('qty')">Qté <span class="sort-arrow"></span></button>
-    <button class="sort-btn"   id="sortBtn-price"  onclick="setStockSort('price')">Prix <span class="sort-arrow"></span></button>
+    <button class="sort-btn on" id="sortBtn-name"  onclick="setStockSort('name')">Nom <span class="sort-arrow">▲</span></button>
+    <button class="sort-btn"   id="sortBtn-group" onclick="setStockSort('group')">Catégorie <span class="sort-arrow"></span></button>
+    <button class="sort-btn"   id="sortBtn-qty"   onclick="setStockSort('qty')">Qté <span class="sort-arrow"></span></button>
+    <button class="sort-btn"   id="sortBtn-price" onclick="setStockSort('price')">Prix <span class="sort-arrow"></span></button>
   </div>
-
   <div id="stockCount" class="stock-count"></div>
   <div id="stockList"  class="ilist"></div>
   <div id="stockEmpty" class="empty" style="display:none;padding:40px 20px">
-    <div class="eico">🔍</div>
-    <div class="etit">Aucun résultat</div>
+    <div class="eico">🔍</div><div class="etit">Aucun résultat</div>
     <div class="esub">Essayez un autre terme de recherche</div>
   </div>
 </div>
@@ -133,7 +195,6 @@
       <span>Scannez un article pour le retirer du stock</span>
     </div>
   </div>
-
   <div class="cam-wrap">
     <video id="sortieVid" playsinline autoplay muted></video>
     <div class="overlay" id="sortieScanOverlay" style="display:none">
@@ -145,7 +206,6 @@
     <div class="cam-off" id="sortieCamOff"><div class="icon">📷</div><p>Caméra inactive</p></div>
   </div>
   <div class="status" id="sortieStatus">Appuyez sur Démarrer</div>
-
   <div class="lscan" id="sortieLscan">
     <div class="ls-lbl">Dernier retrait</div>
     <div class="ls-row">
@@ -155,10 +215,8 @@
     <div class="ls-name" id="sortieLsname"></div>
     <div class="ls-qty" id="sortieLsqty"></div>
   </div>
-
   <button class="btn bp" id="sortieBtnStart" onclick="startSortieCam()">📷 Démarrer le scanner</button>
   <button class="btn bs" id="sortieBtnStop" onclick="stopSortieCam()" style="display:none">⏹ Arrêter</button>
-
   <div class="manual-section">
     <div class="sec-title">Saisie manuelle</div>
     <div class="manual-wrap">
@@ -166,8 +224,6 @@
       <button class="btn bp manualbtn" onclick="sortieManualScan()">✔</button>
     </div>
   </div>
-
-  <!-- Historique des sorties de la session -->
   <div style="margin-top:18px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div class="sec-title" style="margin:0">Sorties de cette session</div>
@@ -175,8 +231,7 @@
     </div>
     <div id="sortieHistory" class="ilist">
       <div class="empty" style="padding:24px 0">
-        <div class="eico">📤</div>
-        <div class="etit">Aucune sortie</div>
+        <div class="eico">📤</div><div class="etit">Aucune sortie</div>
         <div class="esub">Les retraits apparaîtront ici</div>
       </div>
     </div>
@@ -184,11 +239,9 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════ -->
-<!-- PAGE INVENTAIRE (vérification physique)                 -->
+<!-- PAGE INVENTAIRE                                         -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <div class="page" id="page-inventaire">
-
-  <!-- Mode IDLE : pas d'inventaire en cours -->
   <div id="invIdle">
     <div class="inv-hero">
       <div class="inv-hero-icon">📦</div>
@@ -197,14 +250,11 @@
     </div>
     <button class="btn bg" onclick="startInventaire()">▶ Démarrer l'inventaire</button>
   </div>
-
-  <!-- Mode ACTIF : inventaire en cours -->
   <div id="invActive" style="display:none">
     <div class="inv-progress-band">
       <div class="inv-progress-bar"><div class="inv-progress-fill" id="invProgressFill" style="width:0%"></div></div>
       <div class="inv-progress-txt" id="invProgressTxt">0 article(s) scanné(s)</div>
     </div>
-
     <div class="cam-wrap">
       <video id="invVid" playsinline autoplay muted></video>
       <div class="overlay" id="invScanOverlay" style="display:none">
@@ -216,7 +266,6 @@
       <div class="cam-off" id="invCamOff"><div class="icon">📷</div><p>Caméra inactive</p></div>
     </div>
     <div class="status" id="invStatus">Appuyez sur Démarrer</div>
-
     <div class="lscan" id="invLscan">
       <div class="ls-lbl">Dernier scan inventaire</div>
       <div class="ls-row">
@@ -226,10 +275,8 @@
       <div class="ls-name" id="invLsname"></div>
       <div class="ls-qty" id="invLsqty"></div>
     </div>
-
     <button class="btn bp" id="invBtnStart" onclick="startInvCam()">📷 Démarrer le scanner</button>
     <button class="btn bs" id="invBtnStop" onclick="stopInvCam()" style="display:none">⏹ Arrêter</button>
-
     <div class="manual-section">
       <div class="sec-title">Saisie manuelle</div>
       <div class="manual-wrap">
@@ -237,34 +284,22 @@
         <button class="btn bp manualbtn" onclick="invManualScan()">✔</button>
       </div>
     </div>
-
-    <!-- Articles scannés pendant l'inventaire -->
     <div style="margin-top:18px">
       <div class="sec-title">Articles scannés</div>
       <div id="invScannedList" class="ilist"></div>
     </div>
-
     <button class="btn bg" onclick="finishInventaire()" style="margin-top:16px">✅ Terminer et générer le rapport</button>
     <button class="btn br2" onclick="cancelInventaire()" style="margin-top:8px">🗑 Annuler l'inventaire</button>
   </div>
-
-  <!-- Mode RAPPORT -->
   <div id="invReport" style="display:none">
     <div class="inv-report-header">
       <div>📋 Rapport d'inventaire</div>
       <div id="invReportDate" style="font-size:11px;color:var(--dim)"></div>
     </div>
-
-    <!-- Résumé -->
     <div class="inv-summary-grid" id="invSummaryGrid"></div>
-
-    <!-- Liste des écarts -->
     <div class="sec-title" style="margin:16px 0 8px">Détail des écarts</div>
     <div id="invReportList" class="ilist"></div>
-
-    <!-- Total financier -->
     <div class="bl-total-wrap" id="invReportTotal" style="margin-top:16px"></div>
-
     <button class="btn bg" onclick="applyInventaire()" style="margin-top:16px">✅ Appliquer les corrections au stock</button>
     <button class="btn bs" onclick="resetInventaire()" style="margin-top:8px">↩ Nouvel inventaire</button>
   </div>
@@ -293,22 +328,74 @@
 
 <!-- ═══════════════════════ MODALS ═══════════════════════════ -->
 
-<!-- MODAL AJOUT ARTICLE BL -->
+<!-- MODAL INFOS BL (Fournisseur + N° BL) -->
+<div class="mover" id="mBLInfo">
+  <div class="mbox">
+    <div class="mhandle"></div>
+    <div class="mtit">📋 Bon de livraison</div>
+    <div class="msub">Ces informations seront enregistrées avec le BL</div>
+    <label class="flbl">Fournisseur *</label>
+    <input class="finp fg" id="blInfoFournisseur" placeholder="Ex: Rexel, Schneider…" autocomplete="off"/>
+    <label class="flbl">Numéro de BL *</label>
+    <input class="finp fg" id="blInfoNumero" placeholder="Ex: BL-2024-001" autocomplete="off" type="tel"/>
+    <label class="flbl">Date</label>
+    <input class="finp fg" id="blInfoDate" type="date"/>
+    <div class="mact">
+      <button class="btn bs" onclick="closeM('mBLInfo')">Annuler</button>
+      <button class="btn bp" onclick="saveBLInfo()">✅ Valider</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOUVEL ARTICLE BL -->
+<div class="mover" id="mBLNewItem">
+  <div class="mbox">
+    <div class="mhandle"></div>
+    <div class="mtit">🆕 Nouvel article</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:var(--surf2);border:1px solid var(--brd);border-radius:10px;padding:10px 14px">
+      <span style="font-size:18px">📦</span>
+      <div>
+        <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Code détecté</div>
+        <code id="blNewCode" style="font-family:var(--mono);color:var(--cyan);font-size:16px;font-weight:700"></code>
+      </div>
+      <div style="margin-left:auto;font-size:10px;color:var(--orange);background:rgba(224,123,0,.1);border:1px solid rgba(224,123,0,.3);border-radius:20px;padding:3px 10px;font-weight:600">⏸ SCAN PAUSÉ</div>
+    </div>
+    <label class="flbl">Nom du produit *</label>
+    <input class="finp fg" id="blNewName" placeholder="Ex: Robinet thermostatique" autocomplete="off"/>
+    <label class="flbl">Quantité reçue</label>
+    <div class="qctrl" style="margin-bottom:12px">
+      <button class="qbtn" onclick="var q=document.getElementById('blNewQty');q.value=Math.max(1,parseInt(q.value||1)-1)">−</button>
+      <input class="qdisp" id="blNewQty" type="number" min="1" value="1" style="border:1px solid var(--brd);border-radius:10px;background:var(--surf2);font-size:28px"/>
+      <button class="qbtn" onclick="var q=document.getElementById('blNewQty');q.value=parseInt(q.value||1)+1">+</button>
+    </div>
+    <label class="flbl">Prix unitaire HT (€)</label>
+    <input class="finp fg" id="blNewPrice" type="number" step="0.01" min="0" placeholder="0.00"/>
+    <label class="flbl">Catégorie</label>
+    <select class="finp fg" id="blNewGroup"></select>
+    <input class="finp" id="blNewGroupCustom" placeholder="Nom du nouveau groupe" style="display:none;margin-top:6px"/>
+    <div class="mact">
+      <button class="btn bs" onclick="closeBLNewItemModal()">Ignorer</button>
+      <button class="btn bp" onclick="saveBLNewItem()">✅ Ajouter</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL EDIT ARTICLE (STOCK) -->
 <div class="mover" id="mStockEdit">
   <div class="mbox">
+    <div class="mhandle"></div>
     <div class="mtit">✏️ Modifier l'article</div>
     <div style="font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:14px" id="stockEditCodeDisplay"></div>
     <input type="hidden" id="stockEditCode"/>
     <label class="flbl">Nom *</label>
-    <input class="finp" id="stockEditName" autocomplete="off"/>
+    <input class="finp fg" id="stockEditName" autocomplete="off"/>
     <label class="flbl">Catégorie</label>
-    <select class="finp" id="stockEditGroup"></select>
+    <select class="finp fg" id="stockEditGroup"></select>
     <input class="finp" id="stockEditGroupCustom" placeholder="Nom du nouveau groupe" style="display:none;margin-top:6px"/>
     <label class="flbl">Prix unitaire HT (€)</label>
-    <input class="finp" id="stockEditPrice" type="number" step="0.01" min="0"/>
+    <input class="finp fg" id="stockEditPrice" type="number" step="0.01" min="0"/>
     <label class="flbl">Quantité</label>
-    <input class="finp" id="stockEditQty" type="number" min="0" step="1"/>
+    <input class="finp fg" id="stockEditQty" type="number" min="0" step="1"/>
     <div class="mact" style="justify-content:space-between">
       <button class="btn br2" onclick="deleteStockItem()">🗑 Supprimer</button>
       <div style="display:flex;gap:8px">
@@ -319,37 +406,47 @@
   </div>
 </div>
 
+<!-- MODAL ARTICLE INCONNU (SORTIE) -->
+<div class="mover" id="mSortieUnknown">
+  <div class="mbox">
+    <div class="mhandle"></div>
+    <div class="mtit">❌ Article introuvable</div>
+    <div id="mSortieUnknownCode" style="font-family:var(--mono);font-size:13px;color:var(--red);margin-bottom:12px"></div>
+    <div style="font-size:13px;color:var(--dim);margin-bottom:18px">Ce code-barres n'existe pas dans votre inventaire.</div>
+    <div class="mact">
+      <button class="btn bp" onclick="closeM('mSortieUnknown')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ARTICLE INCONNU (INVENTAIRE) -->
+<div class="mover" id="mNewInv">
+  <div class="mbox">
+    <div class="mhandle"></div>
+    <div class="mtit">🆕 Nouvel article</div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--cyan);margin-bottom:14px" id="mNewInvCode"></div>
+    <label class="flbl">Nom *</label>
+    <input class="finp fg" id="fInvName" autocomplete="off"/>
+    <label class="flbl">Catégorie</label>
+    <input class="finp fg" id="fInvGroup" placeholder="Sans groupe" autocomplete="off"/>
+    <label class="flbl">Prix unitaire HT (€)</label>
+    <input class="finp fg" id="fInvPrice" type="number" step="0.01" min="0"/>
+    <div class="mact">
+      <button class="btn bs" onclick="closeM('mNewInv')">Annuler</button>
+      <button class="btn bp" onclick="saveNewInvProduct()">✅ Créer</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST DOUCHETTE -->
 <div id="douchetteToast" class="douchette-toast" style="display:none">
   <span class="douchette-ico">🔫</span>
   <span id="douchetteToastCode"></span>
 </div>
 
-<!-- MODAL NOUVEL ARTICLE BL -->
-<div class="mover" id="mBLNewItem">
-  <div class="mbox">
-    <div class="mtit">🆕 Nouvel article</div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:12px">Code : <code id="blNewCode" style="font-family:var(--mono);color:var(--cyan)"></code></div>
-    <label class="flbl">Nom du produit *</label>
-    <input class="finp" id="blNewName" placeholder="Ex: Robinet thermostatique" autocomplete="off"/>
-    <label class="flbl">Prix unitaire HT (€)</label>
-    <input class="finp" id="blNewPrice" type="number" step="0.01" min="0" placeholder="0.00"/>
-    <label class="flbl">Catégorie</label>
-    <select class="finp" id="blNewGroup"></select>
-    <input class="finp" id="blNewGroupCustom" placeholder="Nom du nouveau groupe" style="display:none;margin-top:6px"/>
-    <div class="mact">
-      <button class="btn bs" onclick="closeM('mBLNewItem')">Annuler</button>
-      <button class="btn bp" onclick="saveBLNewItem()">✅ Ajouter</button>
-    </div>
-  </div>
-</div>
-
 <!-- TOAST -->
 <div id="toast" style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none"></div>
-
-<style>
-#toast.show { opacity: 1 !important; }
-</style>
+<style>#toast.show { opacity: 1 !important; }</style>
 
 <!-- Firebase 9 compat -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
